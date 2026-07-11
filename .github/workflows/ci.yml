@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest
     steps:
       # Official stable major tag; pin to an immutable SHA after repository policy verifies it.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust 1.97.0
         shell: pwsh
         run: rustup toolchain install 1.97.0 --profile minimal; rustup default 1.97.0; rustup component add rustfmt clippy
@@ -33,8 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Official stable major tags; pin to immutable SHAs after repository policy verifies them.
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
       - name: Enable pnpm
@@ -57,8 +57,8 @@ jobs:
     runs-on: windows-latest
     steps:
       # Official stable major tags; pin to immutable SHAs after repository policy verifies them.
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
       - name: Install Rust 1.97.0
@@ -72,8 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Official stable major tags; pin to immutable SHAs after repository policy verifies them.
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
       - name: Enable pnpm
