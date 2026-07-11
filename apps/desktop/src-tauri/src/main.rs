@@ -2,6 +2,8 @@
 
 #![forbid(unsafe_code)]
 
+use tauri as _;
+
 fn main() {
     if let Err(error) = muxlane_desktop::run() {
         eprintln!("Muxlane desktop shell failed to start: {error}");

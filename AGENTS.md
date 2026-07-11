@@ -29,6 +29,8 @@ pnpm install --frozen-lockfile
 pnpm verify
 ```
 
+`pnpm verify` 是 WSL/本地基础验证：它覆盖前端和非 Desktop Rust crates，不等于完整 Cargo Workspace 验证或 Tauri 原生构建验证。Desktop crate 由 Windows CI 或安装了完整 Tauri 系统依赖的环境验证；完成验收仍以匹配范围的完整 CI 结果为准。
+
 不要声称运行了未实际运行的测试，也不要用跳过、吞错或空脚本伪造通过。
 
 ## 安全与来源

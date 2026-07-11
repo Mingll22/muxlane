@@ -2,14 +2,16 @@
 
 ## 环境准备
 
-使用 [README.md](README.md) 所列 Node、pnpm 和 Rust 固定版本。安装依赖后运行完整验证：
+使用 [README.md](README.md) 所列 Node、pnpm 和 Rust 固定版本。安装依赖后运行本地基础验证：
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm verify
 ```
 
-提交前至少运行与改动范围匹配的检查；修改 Rust 或前端公共配置时应运行完整 `pnpm verify`。
+`pnpm verify` 覆盖前端检查和非 Desktop Rust crates 的检查、Clippy 与测试；它不等于完整 Cargo Workspace 验证，也不等于 Tauri 原生构建验证。Desktop crate 由 Windows CI 或安装了完整 Tauri 系统依赖的环境验证。
+
+提交前至少运行与改动范围匹配的检查；修改 Rust 或前端公共配置时应运行 `pnpm verify`，并以完整 CI 结果完成验收。
 
 ## 分支与提交
 
