@@ -1,0 +1,19 @@
+[package]
+name = "muxlane-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Muxlane command-line interface foundation"
+
+[[bin]]
+name = "muxlane"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,48 @@
+# Node and frontend output
+node_modules/
+apps/*/node_modules/
+apps/*/dist/
+*.tsbuildinfo
+
+# Rust and Tauri output
+target/
+apps/*/src-tauri/target/
+apps/*/src-tauri/gen/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+auth.json
+*.token
+*.tokens
+*.cookie
+*.cookies
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# Local runtime data and databases
+.muxlane/
+muxlane-data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Logs, diagnostics, and temporary files
+*.log
+logs/
+diagnostics/
+tmp/
+temp/
+*.tmp
+
+# Editors and operating systems
+.idea/
+.vscode/
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+Desktop.ini

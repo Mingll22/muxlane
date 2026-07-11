@@ -1,0 +1,12 @@
+[package]
+name = "muxlane-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared non-domain foundations for Muxlane"
+
+[lints]
+workspace = true

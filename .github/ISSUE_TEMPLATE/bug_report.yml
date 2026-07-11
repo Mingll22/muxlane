@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a reproducible problem without sensitive data.
+title: 'bug: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include Token, auth.json, Cookie, private key, unredacted logs, or personal paths.
+  - type: input
+    id: version
+    attributes:
+      label: Muxlane version or commit
+      description: Include the release version or commit SHA.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows version, WSL distribution/version, Node, pnpm, and Rust versions.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs or screenshots
+      description: Remove credentials, cookies, personal paths, and vulnerability details before submitting.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Sensitive information check
+      options:
+        - label: I removed credentials, auth.json content, cookies, private keys, and personal paths.
+          required: true

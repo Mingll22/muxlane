@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust quality
+    runs-on: windows-latest
+    steps:
+      # Official stable major tag; pin to an immutable SHA after repository policy verifies it.
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.97.0
+        shell: pwsh
+        run: rustup toolchain install 1.97.0 --profile minimal; rustup default 1.97.0; rustup component add rustfmt clippy
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Check workspace
+        run: cargo check --workspace --all-targets
+      - name: Lint workspace
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Test workspace
+        run: cargo test --workspace --all-features
+
+  frontend:
+    name: Frontend quality
+    runs-on: ubuntu-latest
+    steps:
+      # Official stable major tags; pin to immutable SHAs after repository policy verifies them.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check formatting
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+
+  desktop-windows:
+    name: Desktop Rust check (Windows)
+    runs-on: windows-latest
+    steps:
+      # Official stable major tags; pin to immutable SHAs after repository policy verifies them.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Install Rust 1.97.0
+        shell: pwsh
+        run: rustup toolchain install 1.97.0 --profile minimal; rustup default 1.97.0
+      - name: Check Tauri Rust project
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+  security:
+    name: Dependency security
+    runs-on: ubuntu-latest
+    steps:
+      # Official stable major tags; pin to immutable SHAs after repository policy verifies them.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Audit Node production dependencies
+        run: pnpm audit --prod --audit-level=high
+      - name: Install Rust 1.97.0
+        run: rustup toolchain install 1.97.0 --profile minimal && rustup default 1.97.0
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit Rust dependencies
+        run: cargo audit

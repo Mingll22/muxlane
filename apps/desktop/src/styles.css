@@ -1,0 +1,121 @@
+:root {
+  color: #edf4f2;
+  background: #111417;
+  font-family: 'IBM Plex Mono', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #8be8dc;
+  outline-offset: 3px;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgb(82 214 200 / 8%), transparent 42%),
+    repeating-linear-gradient(90deg, transparent 0 43px, rgb(128 160 160 / 5%) 44px), #111417;
+}
+
+.foundation-panel {
+  position: relative;
+  width: min(760px, calc(100vw - 48px));
+  padding: 56px;
+  border: 1px solid #314044;
+  background: rgb(17 20 23 / 86%);
+  box-shadow: 18px 18px 0 #0b0d0f;
+}
+
+.signal-mark {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 38px;
+}
+
+.signal-mark span {
+  display: block;
+  width: 32px;
+  height: 5px;
+  background: #52d6c8;
+}
+
+.signal-mark span:nth-child(2) {
+  background: #72a7ff;
+}
+
+.signal-mark span:nth-child(3) {
+  background: #d2df62;
+}
+
+.app-header h1.ant-typography {
+  margin: 0;
+  color: #edf4f2;
+  font-size: clamp(3rem, 10vw, 5.8rem);
+  font-weight: 700;
+  letter-spacing: -0.09em;
+  line-height: 0.9;
+}
+
+.eyebrow {
+  margin: 0 0 16px;
+  color: #52d6c8;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+}
+
+.lead.ant-typography {
+  max-width: 36rem;
+  margin: 28px 0 38px;
+  color: #c2d0cf;
+  font-size: 1.05rem;
+}
+
+.stage-card.ant-card {
+  border: 1px solid #314044;
+  box-shadow: none;
+}
+
+.stage-card__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.stage-card h2.ant-typography {
+  margin-top: 28px;
+  color: #edf4f2;
+}
+
+.stage-card .ant-typography {
+  color: #c2d0cf;
+}
+
+.app-footer {
+  margin-top: 34px;
+  color: #819092;
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+@media (max-width: 640px) {
+  .foundation-panel {
+    width: min(100%, calc(100vw - 28px));
+    padding: 32px 24px;
+  }
+}

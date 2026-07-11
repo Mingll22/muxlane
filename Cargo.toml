@@ -1,0 +1,34 @@
+[workspace]
+members = [
+  "apps/desktop/src-tauri",
+  "crates/muxlane-cli",
+  "crates/muxlane-core",
+  "crates/muxlane-protocol",
+  "crates/muxlaned",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+authors = ["Mingll22 <mingll22@foxmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/Mingll22/muxlane"
+homepage = "https://github.com/Mingll22/muxlane"
+documentation = "https://github.com/Mingll22/muxlane"
+readme = "README.md"
+keywords = ["codex", "windows", "wsl", "tauri"]
+categories = ["command-line-utilities"]
+
+[workspace.dependencies]
+clap = { version = "4.6.1", features = ["derive"] }
+tauri = { version = "2.11.5" }
+tauri-build = { version = "2.6.3" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_crate_dependencies = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
