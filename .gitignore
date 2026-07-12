@@ -39,6 +39,18 @@ tmp/
 temp/
 *.tmp
 
+# Local Phase 2 Runtime POC data. Harness source and safe fixtures remain tracked.
+poc/phase-2-runtime/.poc-root/
+poc/phase-2-runtime/local/
+poc/phase-2-runtime/accounts/
+poc/phase-2-runtime/projects/
+poc/phase-2-runtime/backups/
+poc/phase-2-runtime/evidence/
+poc/phase-2-runtime/manifests/
+poc/phase-2-runtime/runtime/
+poc/phase-2-runtime/tmp/
+docs/poc/phase-2-runtime/ENVIRONMENT_PROBE.local.md
+
 # Editors and operating systems
 .idea/
 .vscode/
