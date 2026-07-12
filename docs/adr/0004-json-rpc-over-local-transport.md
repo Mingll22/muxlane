@@ -1,6 +1,6 @@
 # ADR-0004：本地传输上的版本化 JSON-RPC
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-07-12
 - Supersedes：无
 - Superseded by：无

@@ -12,4 +12,4 @@ Muxlane 当前处于阶段 1 的设计冻结工作。阶段 0 的 monorepo、质
 - GUI 关闭不应结束 Daemon、`tmux` 或受管 Codex 任务；`muxlane` CLI 设计为独立诊断与 Recovery 入口。
 - GUI 到 Daemon 的控制面设计为版本化本地 JSON-RPC；Windows 到 WSL 的具体桥接仍待阶段 3 POC 验证。
 
-设计目标不等于已交付功能。MVP 范围仅面向 Windows 10/11、WSL2、默认发行版和 Windows x64。
+设计目标不等于已交付功能。MVP 的 Supported Target 是 Windows 10/11、WSL2、默认 Ubuntu WSL 发行版和 Windows x64；阶段 1 尚未在这些目标上完成业务验收。

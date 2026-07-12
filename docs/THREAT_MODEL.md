@@ -4,12 +4,12 @@
 
 | 项目       | 内容                                                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 状态       | Draft / Frozen Candidate（阶段 1B）                                                                                                       |
+| 状态       | Frozen（阶段 1）                                                                                                                          |
 | 覆盖范围   | Windows 10/11 GUI、Tauri Host、默认 WSL2 发行版、计划中的 `muxlaned`、CLI、Project Runtime、Account Vault、`tmux`、本地 SQLite 与诊断导出 |
 | 不在范围内 | 云端服务、团队共享账号、多租户、远程 LAN 控制面、正式实现代码、真实账号或凭证                                                             |
 | 安全模型   | 保护当前 WSL Linux 用户的凭证、项目与本地控制面；不假设 Windows 主机或该 WSL 用户账户已完全失陷                                           |
 
-这是后续实现和安全测试的冻结候选，不表示任何 Runtime、Vault、Socket 或桥接已经实现。架构证据来自 [PRD](PRD.md)、[总体架构](ARCHITECTURE.md)、[ADR-0001](adr/0001-windows-gui-wsl-control-plane.md) 到 [ADR-0004](adr/0004-json-rpc-over-local-transport.md)。当前仓库只包含阶段 0 骨架；本文中的控制措施均为未来实现要求，不能误读为已有防护。
+这是后续实现和安全测试的冻结设计，不表示任何 Runtime、Vault、Socket 或桥接已经实现。架构证据来自 [PRD](PRD.md)、[总体架构](ARCHITECTURE.md)、[ADR-0001](adr/0001-windows-gui-wsl-control-plane.md) 到 [ADR-0004](adr/0004-json-rpc-over-local-transport.md)。当前仓库只包含阶段 0 骨架；本文中的控制措施均为未来实现要求，不能误读为已有防护。后续 POC 若推翻本设计，必须通过新的 ADR 修订。
 
 本模型使用 Linux 本地文件系统与受限 WSL 发行版作为前提。Linux 的 `flock(2)` 是与打开文件描述关联的建议锁，最后一个相关文件描述符关闭后释放；它不是跨组件的持久状态数据库。[flock(2)](https://man7.org/linux/man-pages/man2/flock.2.html) [fsync(2)](https://man7.org/linux/man-pages/man2/fsync.2.html) 说明：文件 `fsync` 不保证目录项持久化，目录文件描述符也需 `fsync`。同一挂载文件系统内的 `rename` 才能作为原子替换前提，跨挂载点会失败为 `EXDEV`。[rename(2)](https://man7.org/linux/man-pages/man2/rename.2.html)
 
@@ -149,15 +149,15 @@ Likelihood 以攻击前置条件、攻击面与实现复杂度分为 Low、Mediu
 
 ## 7. 实现阶段映射
 
-| 阶段 | 必须交付或 POC 验收的缓解措施                                                              |
-| ---- | ------------------------------------------------------------------------------------------ |
-| 2    | Runtime 受控路径、Project ID、路径遍历/符号链接 POC、Runtime 不落在源码或 Windows 挂载目录 |
-| 3    | Vault 权限、凭证 checkout/commit 原子文件 POC、双 `flock`、Bridge 与 Tauri 最小权限 POC    |
-| 4    | Durable Launch Transaction、Hash 冲突矩阵、进程身份、SQLite 迁移/恢复和故障注入            |
-| 5    | Daemon/CLI Socket 授权、tmux identity、终端转义策略、CLI Recovery 与结构化脱敏日志         |
-| 6    | GUI 重连不改变事务、Capability 审计、Prompt/历史最小化、Usage 不触发切号                   |
-| 7    | Skill/MCP/Plugin 资产来源治理、Project 文件访问边界、诊断导出脱敏                          |
-| 8    | 更新包与供应链校验、升级/迁移回滚、发布响应、持续敏感信息扫描                              |
+| 阶段 | 必须交付或 POC 验收的缓解措施                                                     |
+| ---- | --------------------------------------------------------------------------------- |
+| 2    | Runtime 受控路径、Project ID、凭证刷新与 Account 接管、路径遍历/符号链接 POC      |
+| 3    | Terminal、Bridge、重连、背压、tmux identity 与 Tauri 最小权限 POC                 |
+| 4    | 双 `flock`、Durable Launch Transaction、Hash 冲突矩阵、进程身份和故障注入         |
+| 5    | Daemon/CLI Socket 授权、SQLite 迁移/恢复、控制协议、CLI Recovery 与结构化脱敏日志 |
+| 6    | GUI 重连不改变事务、Capability 审计、Prompt/历史最小化、Usage 不触发切号          |
+| 7    | Skill/MCP/Plugin 资产来源治理、Project 文件访问边界、诊断导出脱敏                 |
+| 8    | 更新包与供应链校验、升级/迁移回滚、发布响应、持续敏感信息扫描                     |
 
 ## 8. 安全测试计划
 

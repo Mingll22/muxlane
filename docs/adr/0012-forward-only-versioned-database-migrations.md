@@ -1,6 +1,6 @@
 # ADR-0012：Forward-only Versioned Database Migrations
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-07-12
 - Supersedes：无
 - Superseded by：无

@@ -4,7 +4,7 @@
 
 | 项目     | 内容                                                                                                                 |
 | -------- | -------------------------------------------------------------------------------------------------------------------- |
-| 状态     | Draft / Frozen Candidate（阶段 1B）                                                                                  |
+| 状态     | Frozen（阶段 1）                                                                                                     |
 | 定义对象 | 一次受管 Codex Launch 的 Project、Account 占用、持久事务、Runner/Codex、tmux 与 GUI 连接生命周期                     |
 | 不定义   | SQLite schema、具体 RPC、Windows—WSL 桥接实现、进程信号时间值或 Tauri 命令                                           |
 | 权威关联 | 持久状态与恢复以 [Recovery State Machine](RECOVERY_STATE_MACHINE.md) 为准；长期决定见 ADR-0003、ADR-0005 至 ADR-0008 |
@@ -54,7 +54,7 @@
 
 ## 5. 固定锁顺序
 
-**唯一允许的顺序是 `Account Lock → Project Lock`；释放顺序为 `Project Lock → Account Lock`。** 这延续 [ADR-0003](adr/0003-exclusive-project-and-account-locks.md) 和现有总体架构，避免在已冻结候选中制造第二种顺序。所有 Launch、停止、恢复和归档路径都必须遵守它；任何未来改动都必须以新的 ADR 替代 ADR-0003。
+**唯一允许的顺序是 `Account Lock → Project Lock`；释放顺序为 `Project Lock → Account Lock`。** 这延续 [ADR-0003](adr/0003-exclusive-project-and-account-locks.md) 和现有总体架构，避免在已冻结设计中制造第二种顺序。所有 Launch、停止、恢复和归档路径都必须遵守它；任何未来改动都必须以新的 ADR 替代 ADR-0003。
 
 固定全局顺序本身消除受管代码路径间的反向等待；Account 先锁定也使同一账号的并行申请在接触 Project Runtime 前失败。它不允许“先获得 Project Lock 再探测 Account Lock”的捷径。Linux `flock` 的实际持有状态优先于锁文件是否存在和 SQLite 可见状态；它与打开文件描述关联，关闭最后一个相关文件描述符时释放。[flock(2)](https://man7.org/linux/man-pages/man2/flock.2.html)
 
@@ -213,4 +213,4 @@ stateDiagram-v2
 
 ## 11. 后续 POC 的事实边界
 
-阶段 2–4 必须验证：WSL Linux 文件系统上的目录权限和 `fsync` 故障语义、`auth.json` 刷新与格式接受范围、实际 Runner/Codex 进程树、PID/boot_id/start ticks 采集、tmux Socket 与 Client/Session 行为、Windows—WSL 受控桥接身份绑定以及 Tauri Capability 配置。文件 `fsync`、目录 `fsync` 和同目录 rename 是设计要求，不应被解释为在所有挂载或断电模型中已证明的绝对保证；必须进行故障注入。
+阶段 2 必须验证 WSL Linux 文件系统上的目录权限和 `fsync` 故障语义、`auth.json` 刷新与格式接受范围及 Account 接管；阶段 3 必须验证 tmux Socket 与 Client/Session 行为、Windows—WSL 受控桥接身份绑定、重连、背压和 Tauri Capability 配置；阶段 4 必须验证实际 Runner/Codex 进程树、PID/boot_id/start ticks、锁、故障注入和冲突 Recovery。文件 `fsync`、目录 `fsync` 和同目录 rename 是设计要求，不应被解释为在所有挂载或断电模型中已证明的绝对保证；必须进行故障注入。

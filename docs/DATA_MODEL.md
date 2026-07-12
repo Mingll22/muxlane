@@ -4,7 +4,7 @@
 
 | 项目   | 内容                                                                                                                                                                                            |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 状态   | 阶段 1C 冻结候选                                                                                                                                                                                |
+| 状态   | Frozen（阶段 1）                                                                                                                                                                                |
 | 范围   | 逻辑实体、所有权、事实来源、迁移与保留原则                                                                                                                                                      |
 | 非目标 | 不创建 SQLite schema、SQL migration、ORM、Rust struct 或 Repository                                                                                                                             |
 | 关联   | [协议](PROTOCOL.md)、[恢复状态机](RECOVERY_STATE_MACHINE.md)、[ADR-0009](adr/0009-sqlite-for-metadata-not-credentials.md) 与 [ADR-0012](adr/0012-forward-only-versioned-database-migrations.md) |
@@ -220,4 +220,4 @@ Muxlane 默认无遥测。诊断包必须由用户主动导出，排除 Token、
 
 ## 13. POC 验证项
 
-阶段 2–4 必须验证：Windows/WSL 路径规范化与 path hash、Hash 选择和文件变化判定、SQLite/文件系统跨边界崩溃、状态 compare-and-set、WAL 或 journal mode、磁盘满、权限错误、数据库损坏、迁移失败、并发唯一约束和归档幂等。任何 POC 结果若推翻本模型，必须先通过 ADR/文档修订收口，再实现正式业务代码。
+阶段 2 必须验证 Windows/WSL 路径规范化、path hash 与凭证 Hash 选择；阶段 4 必须验证 SQLite/文件系统跨边界崩溃、状态 compare-and-set、磁盘满、权限错误、数据库损坏、迁移失败、并发唯一约束和归档幂等；阶段 5 必须验证 WAL 或 journal mode、正式 SQLite 实现和迁移。任何 POC 结果若推翻本模型，必须先通过 ADR/文档修订收口，再实现正式业务代码。

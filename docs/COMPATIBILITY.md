@@ -4,7 +4,7 @@
 
 | 项目   | 内容                                                                     |
 | ------ | ------------------------------------------------------------------------ |
-| 状态   | 阶段 1C 冻结候选                                                         |
+| 状态   | Frozen（阶段 1）                                                         |
 | 范围   | 平台支持、能力探测、协议/数据库演进与阶段 2–8 验证矩阵                   |
 | 非目标 | 本轮不升级依赖、不承诺未经 POC 验证的 Codex App Server Schema 或桥接实现 |
 
@@ -107,7 +107,7 @@ GUI、Daemon 和 CLI 通过 [Protocol v1 Candidate](PROTOCOL.md) 的握手协商
 
 ## 9. Windows—WSL 兼容 POC
 
-阶段 2–4 必须测试默认发行版发现、WSL 未安装、WSL2 未启用、发行版停止/启动、Windows 路径到 WSL 路径转换、空格、Unicode、大小写、符号链接、网络路径、OneDrive、`/mnt/c` 性能、WSL `boot_id` 变化与 `wsl --terminate`。每项要分别记录支持、拒绝或降级行为。
+阶段 2 必须测试默认发行版发现、WSL 未安装/未启用、发行版停止/启动、Windows 路径到 WSL 路径转换、空格、Unicode、大小写、符号链接、网络路径、OneDrive 与 `/mnt/c` 性能；阶段 3 必须测试 Bridge 身份绑定、重连与背压；阶段 4 必须测试 WSL `boot_id` 变化与 `wsl --terminate` Recovery。每项要分别记录支持、拒绝或降级行为。
 
 具体 Windows—WSL Bridge、端口、命名管道、身份绑定和权限模型都属于 **POC validation required**；在此之前不得以临时 TCP/LAN 接口或 WebView 直连替代设计。
 
@@ -121,17 +121,17 @@ Windows 验收需要确认 WebView2 availability、Tauri Capability/ACL、CSP、
 
 ## 12. 阶段 2–8 测试矩阵
 
-| 场景                           | 2              | 3               | 4                | 5              | 6          | 7            | 8        |
-| ------------------------------ | -------------- | --------------- | ---------------- | -------------- | ---------- | ------------ | -------- |
-| Windows 10 / 11、Windows x64   | Runtime 路径   | Bridge/权限     | 重启恢复         | Daemon/CLI     | GUI        | 工作台       | 发布回归 |
-| 2–3 Codex 稳定版本             | Runtime 接受性 | 凭证能力        | refresh/exit     | adapter        | usage      | assets       | 发布窗口 |
-| WSL 冷启动 / `wsl --terminate` | 路径           | 身份/Bridge     | boot_id/Recovery | 重新连接       | GUI 恢复   | 回归         | 现场诊断 |
-| GUI / Daemon 重启              | —              | 重连            | transaction      | terminal       | 窗口语义   | 回归         | 升级     |
-| tmux reconnect                 | —              | 探测            | identity         | attach/history | UI attach  | 回归         | 运维     |
-| credential refresh             | —              | checkout/commit | conflict matrix  | 正式路径       | account UI | 回归         | 发布风险 |
-| SQLite migration               | —              | —               | 中断模型         | 实现/迁移      | 兼容 UI    | 回归         | 升级回滚 |
-| 协议不匹配/能力缺失            | —              | handshake       | Recovery API     | CLI            | GUI        | asset API    | 发布门禁 |
-| 诊断模式/导出脱敏              | —              | Bridge errors   | evidence         | CLI export     | GUI export | asset errors | 现场支持 |
+| 场景                           | 2               | 3                | 4                | 5              | 6          | 7            | 8        |
+| ------------------------------ | --------------- | ---------------- | ---------------- | -------------- | ---------- | ------------ | -------- |
+| Windows 10 / 11、Windows x64   | Runtime 路径    | Bridge/权限      | 重启恢复         | Daemon/CLI     | GUI        | 工作台       | 发布回归 |
+| 2–3 Codex 稳定版本             | Runtime/refresh | Terminal adapter | exit/Recovery    | adapter        | usage      | assets       | 发布窗口 |
+| WSL 冷启动 / `wsl --terminate` | 路径            | Bridge reconnect | boot_id/Recovery | 重新连接       | GUI 恢复   | 回归         | 现场诊断 |
+| GUI / Daemon 重启              | —               | 重连/背压        | transaction      | protocol       | 窗口语义   | 回归         | 升级     |
+| tmux reconnect                 | —               | 探测/背压        | identity         | attach/history | UI attach  | 回归         | 运维     |
+| credential refresh             | checkout/commit | —                | conflict matrix  | 正式路径       | account UI | 回归         | 发布风险 |
+| SQLite migration               | —               | —                | 中断模型         | 实现/迁移      | 兼容 UI    | 回归         | 升级回滚 |
+| 协议不匹配/能力缺失            | —               | handshake        | Recovery API     | CLI            | GUI        | asset API    | 发布门禁 |
+| 诊断模式/导出脱敏              | —               | Bridge errors    | evidence         | CLI export     | GUI export | asset errors | 现场支持 |
 
 表中每个单元是未来验收任务，不是阶段 1C 已完成的测试。每次验证必须记录 OS/WSL/CLI/tmux/Daemon/GUI 版本、命令、结果、已知限制和敏感数据保护结论。
 

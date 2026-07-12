@@ -1,6 +1,6 @@
 # ADR-0007：使用 boot_id 与启动时间的进程身份
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-07-12
 - Supersedes：无
 - Superseded by：无

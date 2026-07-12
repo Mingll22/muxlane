@@ -2,7 +2,7 @@
 
 ## 定位与阶段
 
-Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。当前为阶段 0：仓库奠基。不要提前实现账号、凭证、项目注册、`CODEX_HOME`、协议、daemon 行为、终端、tmux、额度、配置资产治理、更新或发布能力。
+Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。当前处于阶段 1：需求与架构设计冻结；阶段 0 的工程基础已完成。阶段 1 的设计文档不是业务实现：不要提前实现账号、凭证、项目注册、`CODEX_HOME`、协议、daemon 行为、终端、tmux、额度、配置资产治理、更新或发布能力。后续 POC 若推翻冻结假设，必须通过新的 ADR 修订，不能静默改写已接受决策。
 
 ## 目录职责
 

@@ -1,6 +1,6 @@
 # ADR-0002：Project-scoped CODEX_HOME
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-07-12
 - Supersedes：无
 - Superseded by：无

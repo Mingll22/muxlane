@@ -4,7 +4,7 @@
 
 | 项目     | 内容                                                                                      |
 | -------- | ----------------------------------------------------------------------------------------- |
-| 状态     | Draft / Frozen Candidate（阶段 1B）                                                       |
+| 状态     | Frozen（阶段 1）                                                                          |
 | 目标     | 对中断的 Launch Transaction 作可重复、可审计且不丢失凭证的恢复决策                        |
 | 真相来源 | Linux `flock`、持久事务、受控文件系统检查、进程身份、tmux 身份和 Hash；任一单独来源均不足 |
 | 非目标   | 本轮不定义 SQLite schema、Rust 类型、恢复命令 wire format 或自动解决凭证冲突              |
@@ -184,4 +184,4 @@ Hash 是冲突检测证据，不是凭证正确性的排序依据。任何人工
 
 ## 11. 实现前 POC 清单
 
-阶段 2–4 的 POC 必须验证 Linux/WSL 的 `flock` 释放、同目录 rename/目录 `fsync` 故障窗口、目录 fd/no-follow API、当前 Codex CLI refresh 行为、真实 Runner/Codex process identity、tmux 受管标识、WSL 重启 boot_id 行为和 SQLite 中断恢复。任何结果若与本状态机假设矛盾，必须先以 ADR 与本文件修订收口，再实现正式业务代码。
+阶段 2 POC 必须验证同目录 rename/目录 `fsync` 故障窗口、目录 fd/no-follow API、当前 Codex CLI refresh 行为和 Account 接管；阶段 3 POC 必须验证 tmux 受管标识；阶段 4 POC 必须验证 Linux/WSL 的 `flock` 释放、真实 Runner/Codex process identity、WSL 重启 boot_id、SQLite 中断恢复及全部故障注入。任何结果若与本状态机假设矛盾，必须先以 ADR 与本文件修订收口，再实现正式业务代码。

@@ -1,6 +1,6 @@
 # ADR-0008：绝不自动解决 Credential Conflict
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-07-12
 - Supersedes：无
 - Superseded by：无
