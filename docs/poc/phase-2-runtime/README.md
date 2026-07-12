@@ -1,0 +1,91 @@
+# 阶段 2 Runtime POC
+
+> 状态：阶段 2A～2D 的本地 Runtime POC 已执行。本文记录本地 POC 结论；阶段正式关闭由对应 PR、合并结果和 main CI 独立确认。本文描述 POC 的安全实验边界，不代表 Account Vault、Project Runtime Manager、锁、事务、Recovery、Daemon、RPC、tmux 或 GUI 已实现。
+
+## 范围与阶段
+
+| 阶段 | 目标                                                                | 当前状态  |
+| ---- | ------------------------------------------------------------------- | --------- |
+| 2A   | 环境与 Codex CLI 无副作用探测；安全目录模型；最小 Harness；测试协议 | PASS      |
+| 2B   | 单 Account A 的受控凭证副本、运行、退出和变化观察                   | PASS      |
+| 2C   | Account A/B 对同一 Project Runtime 的顺序接管                       | PASS      |
+| 2D   | 路径、文件系统、失败窗口与 POC 结论收口                             | 本地 PASS |
+
+阶段 2A 工具仍只允许空目录、非凭证 synthetic fixture、权限检查和无副作用 CLI 探测。阶段 2B～2D 另行增加了 Python 标准库 Credential Harness：它只在用户明确批准的 source、POC Vault 与 Project Runtime 间执行导入、Checkout、Commit、Hash 冲突保留和结构级比较；比较结果会对 object key 使用稳定短指纹，避免动态账号 key 泄露身份。它不是正式 Runtime Manager，也不实现阶段 4 的锁、durable transaction 或 Recovery。
+
+## 本地运行入口
+
+所有脚本必须显式传入一个位于 Linux 原生文件系统、且不在仓库中的 POC 根目录。根目录本身可位于 `$HOME` 的安全子目录，但不能是 `$HOME`、真实 `~/.codex` 或其子目录。初始化只接受不存在或空且已为 `0700` 的目录；初始化成功后再次运行会拒绝非空根目录，而不会改动既有 POC 或未知用户文件。结构验证可重复运行。以下变量只在本地 shell 中设置；不得把其展开后的路径、evidence 或 Runtime 文件提交到 Git。
+
+```bash
+export POC_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/muxlane-poc/phase-2-runtime"
+
+bash poc/phase-2-runtime/scripts/init-poc-root.sh --poc-root "$POC_ROOT" --dry-run
+bash poc/phase-2-runtime/scripts/init-poc-root.sh --poc-root "$POC_ROOT"
+bash poc/phase-2-runtime/scripts/verify-poc-safety.sh --poc-root "$POC_ROOT"
+bash poc/phase-2-runtime/scripts/probe-environment.sh --poc-root "$POC_ROOT"
+```
+
+Credential Harness 使用稳定 JSON 状态和非零失败退出码。真实 source、POC Root 与 manifest ID 只允许在本地 shell/evidence 中使用：
+
+```bash
+python3 poc/phase-2-runtime/credential_harness.py \
+  --poc-root <POC_ROOT> import \
+  --source-root <APPROVED_SOURCE_ROOT> \
+  --source-auth <APPROVED_SOURCE_AUTH> \
+  --account account-a
+
+python3 poc/phase-2-runtime/credential_harness.py \
+  --poc-root <POC_ROOT> checkout --account account-a --project project-a
+
+python3 poc/phase-2-runtime/credential_harness.py \
+  --poc-root <POC_ROOT> compare --account account-a --project project-a
+
+python3 poc/phase-2-runtime/credential_harness.py \
+  --poc-root <POC_ROOT> commit --manifest-id <MANIFEST_ID>
+```
+
+`probe-environment.sh` 把原始探测信息只写入 `<POC_ROOT>/evidence/`，文件模式为 `0600`。所有 Codex CLI 探测都显式使用新的 disposable `CODEX_HOME`；这仍不能在没有 `strace` 或等价证据时证明全局 Home 未被访问。报告会在写入前后保持 POC 根目录 `0700`，并在结束时扫描常见凭证标记；发现标记时命令非零退出且不在终端回显证据内容。
+
+安全的文件元数据检查示例：
+
+```bash
+printf 'synthetic, non-credential data\n' >"$POC_ROOT/tmp/synthetic.txt"
+chmod 0600 "$POC_ROOT/tmp/synthetic.txt"
+bash poc/phase-2-runtime/scripts/inspect-file-metadata.sh \
+  --poc-root "$POC_ROOT" \
+  --file "$POC_ROOT/tmp/synthetic.txt"
+```
+
+该命令只输出 `<POC_ROOT>` 占位路径、文件类型、权限、`current-user`、大小、mtime 和 SHA-256；不会输出文件内容。待检查的 synthetic 文件必须归当前用户所有且为 `0600`。阶段 2A 的安全验证会拒绝 POC 根目录内出现任何 `auth.json`，因此上例只能用于 synthetic 非凭证文件。
+
+## 目录模型
+
+初始化后，POC 根目录包含以下空的、模式 `0700` 的目录。它是测试隔离布局，不是正式产品的数据模型。
+
+```text
+<POC_ROOT>/
+├── accounts/{account-a,account-b}/
+├── projects/
+│   ├── project-a/codex-home/
+│   └── project-b/codex-home/
+├── source-projects/{project-a,project-b}/
+├── backups/
+├── evidence/
+├── manifests/
+└── tmp/
+```
+
+阶段 2A 不在这些目录创建 `auth.json`。仓库中唯一的 fixture 是 `poc/phase-2-runtime/fixtures/synthetic-non-credential.json`，它明确表示没有凭证，不能用于任何登录、刷新或 Checkout 测试。
+
+## 不得提交的本地数据
+
+不得提交 POC Root、Vault、Runtime、backup、evidence、manifest 实例、临时文件、真实 Hash 清单、Session、日志或真实 `auth.json`。`.gitignore` 只为仓库内可能误建的阶段 2 POC 数据位置设置精确规则；正常 Harness 源码、fixture 和本文档仍受 Git 跟踪。
+
+完整的安全不变量、已知限制和测试协议分别见：
+
+- [Harness 安全说明](HARNESS_SECURITY.md)
+- [环境探测报告](ENVIRONMENT_PROBE.md)
+- [阶段 2 测试协议](TEST_PROTOCOL.md)
+- [阶段 2 脱敏结果](RESULTS.md)
+- [已知限制](KNOWN_LIMITATIONS.md)
