@@ -27,7 +27,7 @@
 | `finished`            | 正常路径已完成，锁已释放并记录最终结果。                                    | 无活动 Runtime 凭证，无待签回事务。                                                       | 仅只读/幂等读取；拒绝状态改写。                                                                | 不执行凭证动作。                                                                     | 是，正常终态                       |
 | `recovered`           | Recovery 已完成且没有凭证冲突；它只说明本事务安全收口。                     | 无待签回凭证；保留脱敏恢复审计。                                                          | 仅只读/幂等读取；拒绝状态改写。                                                                | 不执行凭证动作。                                                                     | 是，恢复终态；**不**表示冲突已解决 |
 | `credential_conflict` | Vault 和 Runtime 都可能为合法但不同的新凭证，或等价证据不足以安全选择。     | 保留 Vault 当前版本、Runtime 遗留版本、签出前备份或至少 Hash/隔离副本；新 Launch 被阻断。 | 仅人工处理后的审计关闭；没有自动后继。                                                         | 保持副本并通知 CLI/GUI；不删除“多余”版本。                                           | 是，人工处理终态                   |
-| `failed`              | 自动恢复无法安全推进，例如损坏文件、权限异常、身份不明或不可恢复 I/O 错误。 | 保留足以诊断的脱敏事务与安全副本；新 Launch 被阻断。                                      | 没有 transaction 后继；人工修复只能新建关联 RecoveryAttempt/Incident 或新 Launch。             | 不无限重试；记录错误类别和次数。                                                     | 是，不可变审计终态                 |
+| `failed`              | 自动恢复无法安全推进，例如损坏文件、权限异常、身份不明或不可恢复 I/O 错误。 | 保留足以诊断的脱敏事务与安全副本；关联 Account/Project 由未解决 RecoveryIncident 阻断。   | 没有 transaction 后继；人工修复只能新建关联 RecoveryAttempt/Incident 或新 Launch。             | 不无限重试；记录错误类别和次数。                                                     | 是，不可变审计终态                 |
 
 非法转换必须被拒绝并记录脱敏诊断；它们不能通过直接更新数据库状态绕过。重复接收当前状态的同一事件是幂等重入，不得重新覆盖 Vault、重复删除唯一副本或重启未知进程。
 
@@ -58,7 +58,7 @@
 | `failed`          | 人工修复后显式 `recover` 有安全证据               | 新建关联 RecoveryAttempt；不改写旧 transaction | `failed`（旧记录保持不变）          |
 | 任意状态          | 同一 transaction_id 的同一已完成事件              | 验证前置 Hash/状态，执行零或一次操作           | 原状态或已到达后继                  |
 
-不允许的例子包括：`running → finished`、`checked_out → finished`、`credential_conflict → auth_committed`、`failed → running`、`failed → recovered`、`failed → credential_conflict`、`finished → 任意非终态`。新 Launch 必须创建新的 transaction，不得复活旧终态事务。人工 Recovery 的 outcome 属于新建关联记录，不能伪造旧 transaction 的终态。
+不允许的例子包括：`running → finished`、`checked_out → finished`、`credential_conflict → auth_committed`、`failed → running`、`failed → recovered`、`failed → credential_conflict`、`finished → 任意非终态`。新 Launch 必须创建新的 transaction，不得复活旧终态事务。人工 Recovery 的 outcome 属于新建关联记录，不能伪造旧 transaction 的终态；只有新的 RecoveryAttempt 已验证无活动锁/身份/凭证风险并将关联 RecoveryIncident 标为 `resolved`，才解除启动阻断。
 
 ## 4. 持久事务概念字段
 
@@ -108,7 +108,7 @@
 9. 计算 Runtime 与 Vault Hash，读取交易的签出前/checkout Hash。
 10. 将事务分类为：原 Codex 仍运行、可恢复监督、可自动 commit、可安全清理、`credential_conflict` 或 `failed`。
 11. 只执行与该分类一致的幂等动作；每一次文件改变重新持久化事务。
-12. 对非终态 transaction 记录 `recovered`、`credential_conflict` 或 `failed`；对已终态的人工操作追加 RecoveryAttempt，包括尝试次数和脱敏错误类别。
+12. 对非终态 transaction 记录 `recovered`、`credential_conflict` 或 `failed`；对已终态的人工操作追加 RecoveryAttempt，包括尝试次数和脱敏错误类别。只有该 Attempt 的安全证据满足启动前置条件时，才将关联 RecoveryIncident 标为 `resolved`；旧 Transaction 终态保持不变。
 13. 通过 GUI/CLI 的状态/诊断接口展示结果与下一步，不展示 Token 或原始凭证。
 
 ## 7. Hash 冲突决策矩阵

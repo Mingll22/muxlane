@@ -47,7 +47,7 @@
 1. Project 已注册、未归档，Account 可用且属于本机用户。
 2. Vault `auth.json` 存在、为可接受格式的常规文件，且权限/父目录符合策略；此检查不记录或输出内容。
 3. Project Runtime 位于受控 WSL Linux 数据根，绝不在项目源码、`/mnt/c`、`/mnt/d` 或同步目录。
-4. 无阻断当前 Project 或 Account 的 `credential_conflict`、人工处理 `failed` 事务，或未经确认的活动身份。
+4. 无阻断当前 Project 或 Account 的 `credential_conflict`、未解决的 RecoveryIncident、未经确认的活动身份，或仍在执行中的 RecoveryAttempt。`failed` Transaction 本身保持不可变审计终态；只有其关联 RecoveryIncident 经新的 RecoveryAttempt 以安全证据显式标记 `resolved` 后，才解除该 Account/Project 的启动阻断。
 5. Daemon、Vault、Runtime、transaction、lock 和 Socket 父目录权限正确，且路径解析不经过非预期符号链接。
 6. Project Lock 与 Account Lock 都可获得；获取失败必须报告占用或不确定状态，不能抢占、自动切号或仅根据心跳失效。
 7. 相关 Project/Account 没有正在恢复的冲突事务；必要时先执行幂等 Recovery。
