@@ -1,7 +1,7 @@
-# 阶段 2A Runtime POC Harness
+# 阶段 2 Runtime POC Harness
 
-这是非生产化的阶段 2A Harness。它只创建空目录、检查路径和权限、输出文件元数据与 Hash，并在受控临时目录中运行 Codex CLI 的 `--version` / `--help` 探测；若当前 CLI 明确暴露 Schema 导出入口，则只在 disposable 目录生成并立即删除 Schema，保留元数据证据。
+这是非生产化的阶段 2 Harness。Shell 工具创建空目录、检查路径/权限并执行无副作用 CLI 探测；`credential_harness.py` 使用 Python 3 标准库实现用户批准 source 到 POC Vault 的导入、Credential Checkout/Commit、Hash 冲突保留和不含值的 JSON 结构比较。
 
-它不创建、复制、移动、读取或修改真实 `auth.json`，也没有 Account Vault、Credential Checkout / Commit、锁、事务、Recovery、tmux、Daemon、RPC 或 GUI 实现。
+阶段 2A Shell 工具仍不接触真实凭证。Credential Harness 只处理导入后的 POC Vault 副本，不移动或修改用户 source；它没有正式 Account Repository、锁、durable transaction、Recovery、tmux、Daemon、RPC 或 GUI 实现。
 
 完整操作说明和安全边界见 [文档入口](../../../docs/poc/phase-2-runtime/README.md)。

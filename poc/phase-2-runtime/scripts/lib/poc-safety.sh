@@ -165,6 +165,9 @@ declare -ar POC_REQUIRED_DIRECTORIES=(
   projects/project-a/codex-home
   projects/project-b
   projects/project-b/codex-home
+  source-projects
+  source-projects/project-a
+  source-projects/project-b
   backups
   evidence
   manifests
