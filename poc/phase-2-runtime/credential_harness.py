@@ -530,9 +530,8 @@ class CredentialHarness:
             )
 
     def _json_child_path(self, parent: str, key: str) -> str:
-        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
-            return f"{parent}.{key}"
-        return f"{parent}[{json.dumps(key, ensure_ascii=False)}]"
+        key_fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
+        return f'{parent}["key:{key_fingerprint}"]'
 
     def _json_type(self, value: Any) -> str:
         if value is None:

@@ -11,7 +11,7 @@
 | 2C   | Account A/B 对同一 Project Runtime 的顺序接管                       | PASS      |
 | 2D   | 路径、文件系统、失败窗口与 POC 结论收口                             | 本地 PASS |
 
-阶段 2A 工具仍只允许空目录、非凭证 synthetic fixture、权限检查和无副作用 CLI 探测。阶段 2B～2D 另行增加了 Python 标准库 Credential Harness：它只在用户明确批准的 source、POC Vault 与 Project Runtime 间执行导入、Checkout、Commit、Hash 冲突保留和结构级比较。它不是正式 Runtime Manager，也不实现阶段 4 的锁、durable transaction 或 Recovery。
+阶段 2A 工具仍只允许空目录、非凭证 synthetic fixture、权限检查和无副作用 CLI 探测。阶段 2B～2D 另行增加了 Python 标准库 Credential Harness：它只在用户明确批准的 source、POC Vault 与 Project Runtime 间执行导入、Checkout、Commit、Hash 冲突保留和结构级比较；比较结果会对 object key 使用稳定短指纹，避免动态账号 key 泄露身份。它不是正式 Runtime Manager，也不实现阶段 4 的锁、durable transaction 或 Recovery。
 
 ## 本地运行入口
 

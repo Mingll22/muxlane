@@ -83,7 +83,7 @@
 | ---------------------------------------------- | -------------------------------------------------------------- |
 | Shell `bash -n`                                | PASS                                                           |
 | `python3 -m compileall -q poc/phase-2-runtime` | PASS                                                           |
-| Credential Harness unittest                    | PASS，28 tests                                                 |
+| Credential Harness unittest                    | PASS，29 tests                                                 |
 | 阶段 2A Harness self-test                      | PASS                                                           |
 | ShellCheck                                     | `NOT RUN`，当前环境未安装                                      |
 | `pnpm install --frozen-lockfile`               | PASS                                                           |

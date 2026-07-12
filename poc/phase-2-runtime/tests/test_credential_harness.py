@@ -428,11 +428,13 @@ class CredentialHarnessTest(unittest.TestCase):
 
         result = self.harness.compare("account-a", "project-a")
         serialized = json.dumps(result, sort_keys=True)
+        synthetic_path = self.harness._json_child_path("$", "synthetic")
+        added_path = self.harness._json_child_path("$", "added")
 
         self.assertEqual(result["status"], "compared")
         self.assertIn(
             {
-                "path": "$.synthetic",
+                "path": synthetic_path,
                 "before_type": "string",
                 "after_type": "string",
                 "change": "changed",
@@ -441,7 +443,7 @@ class CredentialHarnessTest(unittest.TestCase):
         )
         self.assertIn(
             {
-                "path": "$.added",
+                "path": added_path,
                 "before_type": "missing",
                 "after_type": "object",
                 "change": "added",
@@ -450,6 +452,43 @@ class CredentialHarnessTest(unittest.TestCase):
         )
         self.assertNotIn("credential-material", serialized)
         self.assertNotIn("runtime-secret-value", serialized)
+
+    def test_compare_hashes_object_keys_that_contain_identity_material(self):
+        self.source_auth.write_text(
+            json.dumps(
+                {
+                    "accounts": {
+                        "source@example.invalid": {"token": "SECRET_VALUE_ALPHA"}
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.source_auth.chmod(0o644)
+        self.import_account()
+        self.harness.checkout("account-a", "project-a")
+        runtime_auth = self.poc_root / "projects/project-a/codex-home/auth.json"
+        runtime_auth.write_text(
+            json.dumps(
+                {
+                    "accounts": {
+                        "source@example.invalid": {"token": "SECRET_VALUE_OMEGA"}
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        runtime_auth.chmod(0o600)
+
+        result = self.harness.compare("account-a", "project-a")
+        serialized = json.dumps(result, sort_keys=True)
+
+        self.assertEqual(result["status"], "compared")
+        self.assertNotIn("source@example.invalid", serialized)
+        self.assertNotIn("accounts", serialized)
+        self.assertNotIn("token", serialized)
+        self.assertNotIn("SECRET_VALUE_ALPHA", serialized)
+        self.assertNotIn("SECRET_VALUE_OMEGA", serialized)
 
 
 if __name__ == "__main__":
