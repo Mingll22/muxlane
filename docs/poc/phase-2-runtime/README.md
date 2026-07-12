@@ -1,17 +1,17 @@
 # 阶段 2 Runtime POC
 
-> 状态：阶段 2A 已建立非生产 Harness；阶段 2B、2C、2D 尚未执行。本文描述 POC 的安全实验边界，不代表 Account Vault、Project Runtime Manager、Credential Checkout / Commit、锁、事务、Recovery、Daemon、RPC、tmux 或 GUI 已实现。
+> 状态：阶段 2A～2C 的本地 Runtime POC 已执行；阶段 2D 的本地失败与重复性验证已完成，阶段关闭仍以 PR 审查和 CI 为准。本文描述 POC 的安全实验边界，不代表 Account Vault、Project Runtime Manager、锁、事务、Recovery、Daemon、RPC、tmux 或 GUI 已实现。
 
 ## 范围与阶段
 
-| 阶段 | 目标                                                                | 当前状态                 |
-| ---- | ------------------------------------------------------------------- | ------------------------ |
-| 2A   | 环境与 Codex CLI 无副作用探测；安全目录模型；最小 Harness；测试协议 | 本次里程碑               |
-| 2B   | 单 Account A 的受控凭证副本、运行、退出和变化观察                   | 未执行；需要用户本地材料 |
-| 2C   | Account A/B 对同一 Project Runtime 的顺序接管                       | 未执行；需要 2B 结论     |
-| 2D   | 路径、文件系统、失败窗口与 POC 结论收口                             | 未执行                   |
+| 阶段 | 目标                                                                | 当前状态              |
+| ---- | ------------------------------------------------------------------- | --------------------- |
+| 2A   | 环境与 Codex CLI 无副作用探测；安全目录模型；最小 Harness；测试协议 | PASS                  |
+| 2B   | 单 Account A 的受控凭证副本、运行、退出和变化观察                   | PASS                  |
+| 2C   | Account A/B 对同一 Project Runtime 的顺序接管                       | PASS                  |
+| 2D   | 路径、文件系统、失败窗口与 POC 结论收口                             | 本地 PASS；等待 PR/CI |
 
-阶段 2A 只允许空目录、非凭证 synthetic fixture、权限检查、文件元数据/Hash 与 `codex --version` / `codex --help` 等无副作用探测。若当前 CLI 从帮助中明确暴露 Schema 导出入口，可只向 disposable 目录导出、记录元数据后立即删除。它绝不读取、复制、移动或修改真实 `auth.json`，也不启动交互式 Codex、登录/登出、App Server 或真实会话。
+阶段 2A 工具仍只允许空目录、非凭证 synthetic fixture、权限检查和无副作用 CLI 探测。阶段 2B～2D 另行增加了 Python 标准库 Credential Harness：它只在用户明确批准的 source、POC Vault 与 Project Runtime 间执行导入、Checkout、Commit、Hash 冲突保留和结构级比较。它不是正式 Runtime Manager，也不实现阶段 4 的锁、durable transaction 或 Recovery。
 
 ## 本地运行入口
 
@@ -24,6 +24,25 @@ bash poc/phase-2-runtime/scripts/init-poc-root.sh --poc-root "$POC_ROOT" --dry-r
 bash poc/phase-2-runtime/scripts/init-poc-root.sh --poc-root "$POC_ROOT"
 bash poc/phase-2-runtime/scripts/verify-poc-safety.sh --poc-root "$POC_ROOT"
 bash poc/phase-2-runtime/scripts/probe-environment.sh --poc-root "$POC_ROOT"
+```
+
+Credential Harness 使用稳定 JSON 状态和非零失败退出码。真实 source、POC Root 与 manifest ID 只允许在本地 shell/evidence 中使用：
+
+```bash
+python3 poc/phase-2-runtime/credential_harness.py \
+  --poc-root <POC_ROOT> import \
+  --source-root <APPROVED_SOURCE_ROOT> \
+  --source-auth <APPROVED_SOURCE_AUTH> \
+  --account account-a
+
+python3 poc/phase-2-runtime/credential_harness.py \
+  --poc-root <POC_ROOT> checkout --account account-a --project project-a
+
+python3 poc/phase-2-runtime/credential_harness.py \
+  --poc-root <POC_ROOT> compare --account account-a --project project-a
+
+python3 poc/phase-2-runtime/credential_harness.py \
+  --poc-root <POC_ROOT> commit --manifest-id <MANIFEST_ID>
 ```
 
 `probe-environment.sh` 把原始探测信息只写入 `<POC_ROOT>/evidence/`，文件模式为 `0600`。所有 Codex CLI 探测都显式使用新的 disposable `CODEX_HOME`；这仍不能在没有 `strace` 或等价证据时证明全局 Home 未被访问。报告会在写入前后保持 POC 根目录 `0700`，并在结束时扫描常见凭证标记；发现标记时命令非零退出且不在终端回显证据内容。
@@ -50,6 +69,7 @@ bash poc/phase-2-runtime/scripts/inspect-file-metadata.sh \
 ├── projects/
 │   ├── project-a/codex-home/
 │   └── project-b/codex-home/
+├── source-projects/{project-a,project-b}/
 ├── backups/
 ├── evidence/
 ├── manifests/
@@ -67,3 +87,5 @@ bash poc/phase-2-runtime/scripts/inspect-file-metadata.sh \
 - [Harness 安全说明](HARNESS_SECURITY.md)
 - [环境探测报告](ENVIRONMENT_PROBE.md)
 - [阶段 2 测试协议](TEST_PROTOCOL.md)
+- [阶段 2 脱敏结果](RESULTS.md)
+- [已知限制](KNOWN_LIMITATIONS.md)

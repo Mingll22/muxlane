@@ -1,6 +1,6 @@
 # 阶段 2 Runtime POC 测试协议
 
-> 此协议定义后续 POC 的可审计步骤，不表示其中任一真实凭证测试已执行。测试数据只可使用测试代号 `Account A`、`Account B`、`Project A`、`Project B`；日志和报告使用 `<POC_ROOT>`、`<CODEX_HOME>` 等占位符。
+> 此协议定义 POC 的可审计步骤。阶段 2B～2D 已按本协议执行；公开结果见 [RESULTS.md](RESULTS.md)。测试数据只使用 `Account A`、`Account B`、`Project A`、`Project B` 等代号；日志和报告使用 `<POC_ROOT>`、`<CODEX_HOME>` 等占位符。
 
 ## 通用安全门与证据格式
 
@@ -59,4 +59,7 @@
 
 ## 当前状态
 
-阶段 2A 只运行 Harness 的合成自测、环境探测与无副作用 CLI Probe。以下内容均为 `NOT VERIFIED`，并明确留待后续受控阶段：真实 Credential Checkout、真实 Credential Commit、Token refresh、Account A/B 接管、Session 连续性、Project Runtime 隔离、崩溃恢复。
+- 真实 Credential Checkout/Commit、Account A/B 顺序接管、同 Session 有效 Turn、Project Runtime 隔离与适合阶段 2 的失败场景已经验证。
+- Token/Credential Mutation 在本次真实运行中为 `NOT OBSERVED`，不是 Refresh 失败。
+- syscall 级全局 Codex Home 访问为 `NOT VERIFIED`；当前环境没有 `strace`。
+- Daemon/Runner 崩溃、WSL 重启、双锁、durable transaction 与 Recovery Manager 仍属于阶段 4，未由本协议声称通过。
