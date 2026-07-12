@@ -1,15 +1,15 @@
 # 阶段 2 Runtime POC
 
-> 状态：阶段 2A～2C 的本地 Runtime POC 已执行；阶段 2D 的本地失败与重复性验证已完成，阶段关闭仍以 PR 审查和 CI 为准。本文描述 POC 的安全实验边界，不代表 Account Vault、Project Runtime Manager、锁、事务、Recovery、Daemon、RPC、tmux 或 GUI 已实现。
+> 状态：阶段 2A～2D 的本地 Runtime POC 已执行。本文记录本地 POC 结论；阶段正式关闭由对应 PR、合并结果和 main CI 独立确认。本文描述 POC 的安全实验边界，不代表 Account Vault、Project Runtime Manager、锁、事务、Recovery、Daemon、RPC、tmux 或 GUI 已实现。
 
 ## 范围与阶段
 
-| 阶段 | 目标                                                                | 当前状态              |
-| ---- | ------------------------------------------------------------------- | --------------------- |
-| 2A   | 环境与 Codex CLI 无副作用探测；安全目录模型；最小 Harness；测试协议 | PASS                  |
-| 2B   | 单 Account A 的受控凭证副本、运行、退出和变化观察                   | PASS                  |
-| 2C   | Account A/B 对同一 Project Runtime 的顺序接管                       | PASS                  |
-| 2D   | 路径、文件系统、失败窗口与 POC 结论收口                             | 本地 PASS；等待 PR/CI |
+| 阶段 | 目标                                                                | 当前状态  |
+| ---- | ------------------------------------------------------------------- | --------- |
+| 2A   | 环境与 Codex CLI 无副作用探测；安全目录模型；最小 Harness；测试协议 | PASS      |
+| 2B   | 单 Account A 的受控凭证副本、运行、退出和变化观察                   | PASS      |
+| 2C   | Account A/B 对同一 Project Runtime 的顺序接管                       | PASS      |
+| 2D   | 路径、文件系统、失败窗口与 POC 结论收口                             | 本地 PASS |
 
 阶段 2A 工具仍只允许空目录、非凭证 synthetic fixture、权限检查和无副作用 CLI 探测。阶段 2B～2D 另行增加了 Python 标准库 Credential Harness：它只在用户明确批准的 source、POC Vault 与 Project Runtime 间执行导入、Checkout、Commit、Hash 冲突保留和结构级比较。它不是正式 Runtime Manager，也不实现阶段 4 的锁、durable transaction 或 Recovery。
 

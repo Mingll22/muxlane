@@ -1,6 +1,6 @@
 # 阶段 2 Runtime POC 脱敏结果
 
-> 状态：本地 POC 为 **PASS WITH LIMITATION**；阶段正式关闭仍要求 PR 审查、全部必要 CI 和合并后 main CI 通过。本文不包含真实路径、凭证 Hash、身份字段、Session/Thread ID、Prompt 或原始 evidence。
+> 状态：本地 POC 为 **PASS WITH LIMITATION**。本文记录本地结果；阶段正式关闭由对应 PR 审查、全部必要 CI、合并结果和合并后 main CI 独立确认。本文不包含真实路径、凭证 Hash、身份字段、Session/Thread ID、Prompt 或原始 evidence。
 
 ## 环境与能力
 
@@ -94,4 +94,4 @@
 | 自定义敏感信息与 Unicode 控制字符扫描          | PASS                                                           |
 | Gitleaks                                       | `NOT RUN`，当前环境未安装                                      |
 
-本轮没有新增第三方依赖。Desktop Rust 的完成证据仍依赖 Windows CI；PR/CI 状态在阶段正式关闭前单独确认。
+本轮没有新增第三方依赖。Desktop Rust 的完成证据仍依赖 Windows CI；PR 与 main CI 状态不冻结在本地 POC 文档中，由阶段关闭记录单独确认。
