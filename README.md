@@ -46,6 +46,9 @@ docs/                      架构、ADR 与研究文档入口
 
 - [产品需求文档](docs/PRD.md)：阶段 1A 的范围、需求编号、验收原则与风险。
 - [总体架构](docs/ARCHITECTURE.md)：系统边界、运行模型、数据布局与 POC 风险。
+- [威胁模型](docs/THREAT_MODEL.md)：阶段 1B 的资产、边界、攻击路径与安全测试映射。
+- [Runtime 生命周期](docs/RUNTIME_LIFECYCLE.md)：阶段 1B 的受管 Launch、停止、GUI 与 Daemon 生命周期。
+- [持久恢复状态机](docs/RECOVERY_STATE_MACHINE.md)：阶段 1B 的事务状态、Hash 冲突和幂等 Recovery。
 - [架构决策记录](docs/adr/README.md)：当前冻结候选的长期决策。
 - [架构摘要](ARCHITECTURE.md)：上述文档的根目录入口。
 
@@ -104,7 +107,7 @@ cargo run -p muxlaned -- --version
 | 7    | 配置资产治理           |
 | 8    | 发布、升级与运维完善   |
 
-阶段 1A 冻结需求、总体架构和 ADR 候选；具体协议、状态机和持久化实现仍须按后续阶段验证。
+阶段 1A 冻结需求、总体架构和 ADR 候选；阶段 1B 冻结威胁模型、Runtime 生命周期和恢复状态机候选。具体协议、SQLite schema 和持久化实现仍须按后续阶段验证。
 
 ## 贡献
 

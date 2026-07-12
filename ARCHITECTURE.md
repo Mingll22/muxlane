@@ -2,7 +2,7 @@
 
 Muxlane 当前处于阶段 1 的设计冻结工作。阶段 0 的 monorepo、质量工具链和最小桌面外壳已经存在；Account、Project Runtime、Daemon、终端、凭证和协议等业务能力尚未实现。
 
-正式总体架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，需求范围见 [docs/PRD.md](docs/PRD.md)，长期决策见 [docs/adr/README.md](docs/adr/README.md)。
+正式总体架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，需求范围见 [docs/PRD.md](docs/PRD.md)，运行安全与恢复冻结见 [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)、[docs/RUNTIME_LIFECYCLE.md](docs/RUNTIME_LIFECYCLE.md) 和 [docs/RECOVERY_STATE_MACHINE.md](docs/RECOVERY_STATE_MACHINE.md)，长期决策见 [docs/adr/README.md](docs/adr/README.md)。
 
 ## 架构摘要
 
