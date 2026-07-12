@@ -31,6 +31,14 @@ assert_no_parent_traversal() {
   done
 }
 
+assert_safe_poc_path_characters() {
+  local raw_path="$1"
+
+  if [[ "$raw_path" =~ [[:cntrl:]] ]]; then
+    die 'control characters are not allowed in a POC path'
+  fi
+}
+
 assert_no_symlink_components() {
   local absolute_path="$1"
   local component
@@ -83,6 +91,7 @@ canonicalize_absolute_path() {
 
   [[ -n "$raw_path" ]] || die 'a path is required'
   [[ "$raw_path" == /* ]] || die 'relative paths are not allowed'
+  assert_safe_poc_path_characters "$raw_path"
   assert_no_parent_traversal "$raw_path"
   assert_no_symlink_components "$raw_path"
   require_command realpath
@@ -97,18 +106,18 @@ validate_poc_root() {
   local codex_home
   local repo
 
-  root="$(canonicalize_absolute_path "$raw_root")"
+  root="$(canonicalize_absolute_path "$raw_root")" || return 1
   [[ "$root" != '/' ]] || die 'the filesystem root is not a valid POC root'
 
-  home="$(realpath --canonicalize-existing -- "$HOME")"
-  codex_home="$(realpath --canonicalize-missing -- "$home/.codex")"
-  repo="$(realpath --canonicalize-existing -- "$REPO_ROOT")"
+  home="$(realpath --canonicalize-existing -- "$HOME")" || return 1
+  codex_home="$(realpath --canonicalize-missing -- "$home/.codex")" || return 1
+  repo="$(realpath --canonicalize-existing -- "$REPO_ROOT")" || return 1
 
   [[ "$root" != "$home" ]] || die 'the user HOME directory is not a valid POC root'
   ! is_within_path "$root" "$codex_home" || die 'the real global CODEX_HOME is not a valid POC root'
   ! is_within_path "$root" "$repo" || die 'the repository or a repository subdirectory is not a valid POC root'
 
-  parent="$(nearest_existing_parent "$root")"
+  parent="$(nearest_existing_parent "$root")" || return 1
   assert_no_symlink_components "$parent"
   assert_linux_native_filesystem "$parent"
 
@@ -126,11 +135,13 @@ validate_file_within_poc_root() {
   local root="$2"
   local file
 
-  file="$(canonicalize_absolute_path "$raw_file")"
+  file="$(canonicalize_absolute_path "$raw_file")" || return 1
   [[ -e "$file" ]] || die 'the requested file does not exist'
   [[ ! -L "$file" ]] || die 'symbolic-link files are not allowed'
   [[ -f "$file" ]] || die 'the requested path is not a regular file'
   is_within_path "$file" "$root" || die 'the requested file is outside the explicit POC root'
+  [[ "$(stat --format='%u' -- "$file")" == "$(id --user)" ]] || die 'the requested file is not owned by the current user'
+  [[ "$(stat --format='%a' -- "$file")" == '600' ]] || die 'the requested file must have mode 0600'
   printf '%s\n' "$file"
 }
 

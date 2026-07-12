@@ -38,7 +38,7 @@ while (($# > 0)); do
   esac
 done
 
-POC_ROOT="$(validate_poc_root "$raw_root")"
+POC_ROOT="$(validate_poc_root "$raw_root")" || exit $?
 
 if [[ "$dry_run" == true ]]; then
   printf 'DRY RUN: would verify the Phase 2A POC structure at %s\n' "$(relative_poc_path "$POC_ROOT" "$POC_ROOT")"

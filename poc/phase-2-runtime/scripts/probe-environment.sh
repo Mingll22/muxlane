@@ -13,7 +13,9 @@ Usage: probe-environment.sh --poc-root <absolute-linux-path> [--dry-run]
 Write a local, mode-0600 evidence report below the explicit Phase 2A POC root.
 The probe only runs version/help commands, an isolated CODEX_HOME version/help
 check, and an explicitly exposed disposable Schema export. It never starts
-interactive Codex, logs in/out, reads ~/.codex, or prints credential file contents.
+interactive Codex or logs in/out, and it never intentionally targets ~/.codex
+or prints credential file contents. Without strace or equivalent evidence, an
+isolated probe does not prove that the CLI avoided the global Home.
 EOF
 }
 
@@ -39,7 +41,7 @@ while (($# > 0)); do
   esac
 done
 
-POC_ROOT="$(validate_poc_root "$raw_root")"
+POC_ROOT="$(validate_poc_root "$raw_root")" || exit $?
 verify_poc_layout "$POC_ROOT"
 
 if [[ "$dry_run" == true ]]; then
@@ -96,6 +98,10 @@ record_text() {
   printf '%s\n' "$1" >>"$EVIDENCE_FILE"
 }
 
+record_isolated_codex_command() {
+  record_command env "CODEX_HOME=$DISPOSABLE_CODEX_HOME" codex "$@"
+}
+
 record_tree_metadata() {
   local directory="$1"
 
@@ -147,11 +153,17 @@ if command -v codex >/dev/null 2>&1; then
   CODEX_BINARY="$(command -v codex)"
   record_text "command -v codex: $CODEX_BINARY"
   record_command realpath --canonicalize-existing -- "$CODEX_BINARY"
-  record_command codex --version
+  DISPOSABLE_CODEX_HOME="$(mktemp --directory "$POC_ROOT/tmp/codex-home-probe.XXXXXX")"
+  chmod 0700 -- "$DISPOSABLE_CODEX_HOME"
+  record_text ''
+  record_text '[Disposable CODEX_HOME version/help probe]'
+  record_text 'Before:'
+  record_tree_metadata "$DISPOSABLE_CODEX_HOME" >>"$EVIDENCE_FILE"
+  record_isolated_codex_command --version
   [[ "$LAST_COMMAND_EXIT_CODE" == 0 ]] || codex_probe_failed=true
 
   HELP_CAPTURE="$(mktemp "$POC_ROOT/evidence/.codex-help.XXXXXX")"
-  if codex --help >"$HELP_CAPTURE" 2>&1; then
+  if env "CODEX_HOME=$DISPOSABLE_CODEX_HOME" codex --help >"$HELP_CAPTURE" 2>&1; then
     help_exit_code=0
   else
     help_exit_code=$?
@@ -165,7 +177,7 @@ if command -v codex >/dev/null 2>&1; then
 
   for subcommand in resume login debug; do
     if awk -v command_name="$subcommand" '$1 == command_name { found = 1 } END { exit !found }' "$HELP_CAPTURE"; then
-      record_command codex "$subcommand" --help
+      record_isolated_codex_command "$subcommand" --help
     else
       record_text "codex $subcommand --help: not exposed by observed top-level help"
     fi
@@ -173,7 +185,7 @@ if command -v codex >/dev/null 2>&1; then
 
   if awk '$1 == "app-server" { found = 1 } END { exit !found }' "$HELP_CAPTURE"; then
     APP_SERVER_HELP_CAPTURE="$(mktemp "$POC_ROOT/evidence/.codex-app-server-help.XXXXXX")"
-    if codex app-server --help >"$APP_SERVER_HELP_CAPTURE" 2>&1; then
+    if env "CODEX_HOME=$DISPOSABLE_CODEX_HOME" codex app-server --help >"$APP_SERVER_HELP_CAPTURE" 2>&1; then
       app_server_help_exit_code=0
     else
       app_server_help_exit_code=$?
@@ -185,7 +197,7 @@ if command -v codex >/dev/null 2>&1; then
     } >>"$EVIDENCE_FILE"
 
     if awk '$1 == "generate-json-schema" { found = 1 } END { exit !found }' "$APP_SERVER_HELP_CAPTURE"; then
-      record_command codex app-server generate-json-schema --help
+      record_isolated_codex_command app-server generate-json-schema --help
       app_server_schema_export_available=true
     else
       record_text 'codex app-server generate-json-schema --help: not exposed by observed app-server help'
@@ -205,14 +217,6 @@ if command -v codex >/dev/null 2>&1; then
     record_text 'Codex installation source: not safely determined because npm is unavailable'
   fi
 
-  DISPOSABLE_CODEX_HOME="$(mktemp --directory "$POC_ROOT/tmp/codex-home-probe.XXXXXX")"
-  chmod 0700 -- "$DISPOSABLE_CODEX_HOME"
-  record_text ''
-  record_text '[Disposable CODEX_HOME version/help probe]'
-  record_text 'Before:'
-  record_tree_metadata "$DISPOSABLE_CODEX_HOME" >>"$EVIDENCE_FILE"
-  record_command env "CODEX_HOME=$DISPOSABLE_CODEX_HOME" codex --version
-  record_command env "CODEX_HOME=$DISPOSABLE_CODEX_HOME" codex --help
   record_text 'After:'
   record_tree_metadata "$DISPOSABLE_CODEX_HOME" >>"$EVIDENCE_FILE"
 
@@ -221,7 +225,7 @@ if command -v codex >/dev/null 2>&1; then
     chmod 0700 -- "$SCHEMA_OUTPUT_DIRECTORY"
     record_text ''
     record_text '[Disposable App Server schema export probe]'
-    record_command env "CODEX_HOME=$DISPOSABLE_CODEX_HOME" codex app-server generate-json-schema --out "$SCHEMA_OUTPUT_DIRECTORY"
+    record_isolated_codex_command app-server generate-json-schema --out "$SCHEMA_OUTPUT_DIRECTORY"
     record_text 'Generated schema metadata:'
     record_tree_metadata "$SCHEMA_OUTPUT_DIRECTORY" >>"$EVIDENCE_FILE"
     [[ "$LAST_COMMAND_EXIT_CODE" == 0 ]] || codex_probe_failed=true

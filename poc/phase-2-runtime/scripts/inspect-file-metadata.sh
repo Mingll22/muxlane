@@ -44,8 +44,9 @@ while (($# > 0)); do
   esac
 done
 
-POC_ROOT="$(validate_poc_root "$raw_root")"
-FILE_PATH="$(validate_file_within_poc_root "$raw_file" "$POC_ROOT")"
+POC_ROOT="$(validate_poc_root "$raw_root")" || exit $?
+verify_poc_layout "$POC_ROOT"
+FILE_PATH="$(validate_file_within_poc_root "$raw_file" "$POC_ROOT")" || exit $?
 
 if [[ "$dry_run" == true ]]; then
   printf 'DRY RUN: would inspect metadata for %s\n' "$(relative_poc_path "$FILE_PATH" "$POC_ROOT")"
@@ -55,7 +56,7 @@ fi
 printf 'file=%s\n' "$(relative_poc_path "$FILE_PATH" "$POC_ROOT")"
 printf 'type=%s\n' "$(stat --format='%F' -- "$FILE_PATH")"
 printf 'mode=%s\n' "$(stat --format='%a' -- "$FILE_PATH")"
-printf 'owner=%s\n' "$(stat --format='%U' -- "$FILE_PATH")"
+printf 'owner=current-user\n'
 printf 'size_bytes=%s\n' "$(stat --format='%s' -- "$FILE_PATH")"
 printf 'mtime=%s\n' "$(stat --format='%y' -- "$FILE_PATH")"
 printf 'sha256=%s\n' "$(sha256sum -- "$FILE_PATH" | awk '{ print $1 }')"

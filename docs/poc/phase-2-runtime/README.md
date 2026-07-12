@@ -15,7 +15,7 @@
 
 ## 本地运行入口
 
-所有脚本必须显式传入一个位于 Linux 原生文件系统、且不在仓库中的 POC 根目录。以下变量只在本地 shell 中设置；不得把其展开后的路径、evidence 或 Runtime 文件提交到 Git。
+所有脚本必须显式传入一个位于 Linux 原生文件系统、且不在仓库中的 POC 根目录。根目录本身可位于 `$HOME` 的安全子目录，但不能是 `$HOME`、真实 `~/.codex` 或其子目录。初始化只接受不存在或空且已为 `0700` 的目录；初始化成功后再次运行会拒绝非空根目录，而不会改动既有 POC 或未知用户文件。结构验证可重复运行。以下变量只在本地 shell 中设置；不得把其展开后的路径、evidence 或 Runtime 文件提交到 Git。
 
 ```bash
 export POC_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/muxlane-poc/phase-2-runtime"
@@ -26,7 +26,7 @@ bash poc/phase-2-runtime/scripts/verify-poc-safety.sh --poc-root "$POC_ROOT"
 bash poc/phase-2-runtime/scripts/probe-environment.sh --poc-root "$POC_ROOT"
 ```
 
-`probe-environment.sh` 把原始探测信息只写入 `<POC_ROOT>/evidence/`，文件模式为 `0600`。报告会在写入前后保持 POC 根目录 `0700`，并在结束时扫描常见凭证标记；发现标记时命令非零退出且不在终端回显证据内容。
+`probe-environment.sh` 把原始探测信息只写入 `<POC_ROOT>/evidence/`，文件模式为 `0600`。所有 Codex CLI 探测都显式使用新的 disposable `CODEX_HOME`；这仍不能在没有 `strace` 或等价证据时证明全局 Home 未被访问。报告会在写入前后保持 POC 根目录 `0700`，并在结束时扫描常见凭证标记；发现标记时命令非零退出且不在终端回显证据内容。
 
 安全的文件元数据检查示例：
 
@@ -38,7 +38,7 @@ bash poc/phase-2-runtime/scripts/inspect-file-metadata.sh \
   --file "$POC_ROOT/tmp/synthetic.txt"
 ```
 
-该命令只输出 `<POC_ROOT>` 占位路径、文件类型、权限、owner、大小、mtime 和 SHA-256；不会输出文件内容。阶段 2A 的安全验证会拒绝 POC 根目录内出现任何 `auth.json`，因此上例只能用于 synthetic 非凭证文件。
+该命令只输出 `<POC_ROOT>` 占位路径、文件类型、权限、`current-user`、大小、mtime 和 SHA-256；不会输出文件内容。待检查的 synthetic 文件必须归当前用户所有且为 `0600`。阶段 2A 的安全验证会拒绝 POC 根目录内出现任何 `auth.json`，因此上例只能用于 synthetic 非凭证文件。
 
 ## 目录模型
 

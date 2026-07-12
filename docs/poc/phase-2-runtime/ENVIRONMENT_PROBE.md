@@ -10,7 +10,7 @@ bash poc/phase-2-runtime/scripts/init-poc-root.sh --poc-root "$POC_ROOT"
 bash poc/phase-2-runtime/scripts/probe-environment.sh --poc-root "$POC_ROOT"
 ```
 
-探测会记录操作系统/WSL、发行版、内核、CPU 架构、Shell、`HOME`、XDG 目录、umask、仓库与 POC 根目录的文件系统、Rust/Cargo/Node/pnpm、Codex CLI 路径/版本/安全可判断的安装来源，以及观察到的帮助命令。它不会读取现有全局 Codex 目录，也不导出任何凭证文件内容。
+探测会记录操作系统/WSL、发行版、内核、CPU 架构、Shell、`HOME`、XDG 目录、umask、仓库与 POC 根目录的文件系统、Rust/Cargo/Node/pnpm、Codex CLI 路径/版本/安全可判断的安装来源，以及观察到的帮助命令。它不主动把现有全局 Codex 目录作为输入，也不导出任何凭证文件内容；没有 `strace` 或等价证据时，不能由此断言 CLI 从未访问全局 Home。
 
 ## 结论分类
 
