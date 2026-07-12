@@ -1859,6 +1859,9 @@ version = "0.1.0"
 name = "muxlane-desktop"
 version = "0.1.0"
 dependencies = [
+ "muxlane-protocol",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
 ]
@@ -1866,12 +1869,18 @@ dependencies = [
 [[package]]
 name = "muxlane-protocol"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "muxlaned"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "muxlane-protocol",
+ "serde_json",
 ]
 
 [[package]]
