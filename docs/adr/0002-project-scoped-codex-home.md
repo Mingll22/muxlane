@@ -11,7 +11,7 @@
 
 ## Decision
 
-每个 Project 永久拥有独立的 Project Runtime，位于 `~/.local/share/muxlane/projects/<project-id>/codex-home`。Account 只拥有独立 Account Vault。启动时将 Vault 的 `auth.json` 原子复制为 Runtime 活动凭证并设置 `CODEX_HOME`；退出或 Recovery 时再原子 Credential Commit 回 Vault 并清理 Runtime 活动凭证。切换 Account 不改变 Project Runtime。
+每个 Project 永久拥有独立的 Project Runtime，位于 `~/.local/share/muxlane/projects/<project-id>/codex-home`。`project_id` 由路径规范化信息的稳定 hash 派生，具体算法待阶段 2 POC。Account 只拥有独立 Account Vault。启动时将 Vault 的 `auth.json` 原子复制为 Runtime 活动凭证并设置 `CODEX_HOME`；退出或 Recovery 时再原子 Credential Commit 回 Vault 并清理 Runtime 活动凭证。切换 Account 不改变 Project Runtime。
 
 ## Consequences
 

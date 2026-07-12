@@ -15,50 +15,50 @@
 
 “锁不变量”指正常运行时的要求；Daemon/WSL 崩溃后内核可能已释放 `flock`，恢复器必须重新获得锁或报告活动冲突，不能用磁盘锁文件是否存在替代检查。每次进入非终态、每次实质恢复决定和每个终态都必须耐久化。
 
-| 状态                  | 含义与进入条件                                                              | 磁盘/锁不变量                                                                             | 允许事件与合法后继                                                                             | 崩溃后恢复                                                                           | 终态                                       |
-| --------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------ |
-| `preparing`           | durable transaction 已创建，尚未确认 Runtime 最终凭证。                     | Vault 原件不应被修改；仅受控临时文件可存在；正常时双锁已持有。                            | checkout 成功 → `checked_out`；安全无副作用清理 → `recovered`；无法判定 → `failed`。           | 检查临时文件、Runtime、Vault Hash；不把临时内容签回。                                | 否                                         |
-| `checked_out`         | Runtime `auth.json` 已原子就位并验证，但没有可信 `running` 记录。           | Runtime 常规 `auth.json` 存在且为 `0600`；正常时双锁持有。                                | 进程身份持久化 → `running`；无进程的安全收尾 → `committing_auth`；不确定 → `failed`/冲突。     | 先排除实际活进程；再按 Hash 矩阵签回、清理或冲突。                                   | 否                                         |
-| `running`             | Runner/Codex 身份已记录，Runtime 凭证可能被刷新。                           | Runtime `auth.json` 存在且事务有 boot_id/PID/start ticks/identity；正常时双锁持有。       | 确认 Codex 退出 → `codex_exited`；确认仍运行 → 幂等留在 `running`；身份不明 → `failed`。       | 以锁、boot_id、PID、start ticks、cmdline、heartbeat 顺序重验；不得因心跳过期杀进程。 | 否                                         |
-| `codex_exited`        | 已观察并验证 Codex 退出，尚未开始写 Vault。                                 | Runtime 凭证可能存在；正常时双锁仍持有。                                                  | 开始比较/签回 → `committing_auth`；缺失或损坏判定失败 → `failed`。                             | 确认没有原进程后进入相同 commit 决策。                                               | 否                                         |
-| `committing_auth`     | 正在比较 Hash 并准备或执行 Vault 原子签回。                                 | Vault、Runtime、同目录临时或隔离副本可能并存；双锁在正常路径仍持有。                      | Vault 成功耐久化 → `auth_committed`；双更新 → `credential_conflict`；I/O/验证失败 → `failed`。 | 重新读取每个候选副本和 Hash；绝不以“最后写入”覆盖。                                  | 否                                         |
-| `auth_committed`      | Vault 新版本已验证并耐久化，尚未删除 Runtime 副本。                         | Vault Hash 必须匹配该 transaction 的已提交目标；Runtime 可能仍存在；双锁仍持有。          | Runtime 清理完成 → `cleaned`；无法验证/删除 → `failed`。                                       | 仅在 Vault 目标 Hash 已证实时清理 Runtime；否则不伪造成功。                          | 否                                         |
-| `cleaned`             | Runtime 活动凭证和受控临时文件已清理，凭证事务已安全收口。                  | 没有 Runtime `auth.json`；Vault 未被无证据覆盖；锁可能正在按顺序释放。                    | 正常最终记录 → `finished`；崩溃恢复收尾 → `recovered`。                                        | 验证无活进程和无活动凭证后幂等标记 `recovered`。                                     | 否                                         |
-| `finished`            | 正常路径已完成，锁已释放并记录最终结果。                                    | 无活动 Runtime 凭证，无待签回事务。                                                       | 仅只读/幂等读取；拒绝状态改写。                                                                | 不执行凭证动作。                                                                     | 是，正常终态                               |
-| `recovered`           | Recovery 已完成且没有凭证冲突；它只说明本事务安全收口。                     | 无待签回凭证；保留脱敏恢复审计。                                                          | 仅只读/幂等读取；拒绝状态改写。                                                                | 不执行凭证动作。                                                                     | 是，恢复终态；**不**表示冲突已解决         |
-| `credential_conflict` | Vault 和 Runtime 都可能为合法但不同的新凭证，或等价证据不足以安全选择。     | 保留 Vault 当前版本、Runtime 遗留版本、签出前备份或至少 Hash/隔离副本；新 Launch 被阻断。 | 仅人工处理后的审计关闭；没有自动后继。                                                         | 保持副本并通知 CLI/GUI；不删除“多余”版本。                                           | 是，人工处理终态                           |
-| `failed`              | 自动恢复无法安全推进，例如损坏文件、权限异常、身份不明或不可恢复 I/O 错误。 | 保留足以诊断的脱敏事务与安全副本；新 Launch 被阻断。                                      | 自动恢复无后继；显式人工修复后可产生 `recovered` 或 `credential_conflict` 审计结果。           | 不无限重试；记录错误类别和次数。                                                     | 对自动恢复是终态；对人工恢复不是不可变终态 |
+| 状态                  | 含义与进入条件                                                              | 磁盘/锁不变量                                                                             | 允许事件与合法后继                                                                             | 崩溃后恢复                                                                           | 终态                               |
+| --------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------- |
+| `preparing`           | durable transaction 已创建，尚未确认 Runtime 最终凭证。                     | Vault 原件不应被修改；仅受控临时文件可存在；正常时双锁已持有。                            | checkout 成功 → `checked_out`；安全无副作用清理 → `recovered`；无法判定 → `failed`。           | 检查临时文件、Runtime、Vault Hash；不把临时内容签回。                                | 否                                 |
+| `checked_out`         | Runtime `auth.json` 已原子就位并验证，但没有可信 `running` 记录。           | Runtime 常规 `auth.json` 存在且为 `0600`；正常时双锁持有。                                | 进程身份持久化 → `running`；无进程的安全收尾 → `committing_auth`；不确定 → `failed`/冲突。     | 先排除实际活进程；再按 Hash 矩阵签回、清理或冲突。                                   | 否                                 |
+| `running`             | Runner/Codex 身份已记录，Runtime 凭证可能被刷新。                           | Runtime `auth.json` 存在且事务有 boot_id/PID/start ticks/identity；正常时双锁持有。       | 确认 Codex 退出 → `codex_exited`；确认仍运行 → 幂等留在 `running`；身份不明 → `failed`。       | 以锁、boot_id、PID、start ticks、cmdline、heartbeat 顺序重验；不得因心跳过期杀进程。 | 否                                 |
+| `codex_exited`        | 已观察并验证 Codex 退出，尚未开始写 Vault。                                 | Runtime 凭证可能存在；正常时双锁仍持有。                                                  | 开始比较/签回 → `committing_auth`；缺失或损坏判定失败 → `failed`。                             | 确认没有原进程后进入相同 commit 决策。                                               | 否                                 |
+| `committing_auth`     | 正在比较 Hash 并准备或执行 Vault 原子签回。                                 | Vault、Runtime、同目录临时或隔离副本可能并存；双锁在正常路径仍持有。                      | Vault 成功耐久化 → `auth_committed`；双更新 → `credential_conflict`；I/O/验证失败 → `failed`。 | 重新读取每个候选副本和 Hash；绝不以“最后写入”覆盖。                                  | 否                                 |
+| `auth_committed`      | Vault 新版本已验证并耐久化，尚未删除 Runtime 副本。                         | Vault Hash 必须匹配该 transaction 的已提交目标；Runtime 可能仍存在；双锁仍持有。          | Runtime 清理完成 → `cleaned`；无法验证/删除 → `failed`。                                       | 仅在 Vault 目标 Hash 已证实时清理 Runtime；否则不伪造成功。                          | 否                                 |
+| `cleaned`             | Runtime 活动凭证和受控临时文件已清理，凭证事务已安全收口。                  | 没有 Runtime `auth.json`；Vault 未被无证据覆盖；锁可能正在按顺序释放。                    | 正常最终记录 → `finished`；崩溃恢复收尾 → `recovered`。                                        | 验证无活进程和无活动凭证后幂等标记 `recovered`。                                     | 否                                 |
+| `finished`            | 正常路径已完成，锁已释放并记录最终结果。                                    | 无活动 Runtime 凭证，无待签回事务。                                                       | 仅只读/幂等读取；拒绝状态改写。                                                                | 不执行凭证动作。                                                                     | 是，正常终态                       |
+| `recovered`           | Recovery 已完成且没有凭证冲突；它只说明本事务安全收口。                     | 无待签回凭证；保留脱敏恢复审计。                                                          | 仅只读/幂等读取；拒绝状态改写。                                                                | 不执行凭证动作。                                                                     | 是，恢复终态；**不**表示冲突已解决 |
+| `credential_conflict` | Vault 和 Runtime 都可能为合法但不同的新凭证，或等价证据不足以安全选择。     | 保留 Vault 当前版本、Runtime 遗留版本、签出前备份或至少 Hash/隔离副本；新 Launch 被阻断。 | 仅人工处理后的审计关闭；没有自动后继。                                                         | 保持副本并通知 CLI/GUI；不删除“多余”版本。                                           | 是，人工处理终态                   |
+| `failed`              | 自动恢复无法安全推进，例如损坏文件、权限异常、身份不明或不可恢复 I/O 错误。 | 保留足以诊断的脱敏事务与安全副本；新 Launch 被阻断。                                      | 没有 transaction 后继；人工修复只能新建关联 RecoveryAttempt/Incident 或新 Launch。             | 不无限重试；记录错误类别和次数。                                                     | 是，不可变审计终态                 |
 
 非法转换必须被拒绝并记录脱敏诊断；它们不能通过直接更新数据库状态绕过。重复接收当前状态的同一事件是幂等重入，不得重新覆盖 Vault、重复删除唯一副本或重启未知进程。
 
 ## 3. 完整转换表
 
-| From              | 事件/守卫                                         | 动作                                   | To                                   |
-| ----------------- | ------------------------------------------------- | -------------------------------------- | ------------------------------------ |
-| 无                | 双锁已获、事务记录成功                            | 写入最小事务元数据                     | `preparing`                          |
-| `preparing`       | checkout 原子完成且 Runtime 验证                  | 写入 checkout Hash 和状态              | `checked_out`                        |
-| `preparing`       | 未生成最终 Runtime 文件，安全清理                 | 删除受控临时文件、保留审计             | `recovered`                          |
-| `preparing`       | 最终文件/临时文件无法安全判定                     | 隔离可疑文件、记录错误                 | `failed`                             |
-| `checked_out`     | Runner/Codex 身份完整且状态持久化                 | 写 PID、boot_id、start ticks、identity | `running`                            |
-| `checked_out`     | 无原进程，Runtime 文件完整                        | 进入 Hash/commit 决策                  | `committing_auth`                    |
-| `checked_out`     | 文件损坏、身份冲突或不安全路径                    | 保留副本、记录原因                     | `failed` 或 `credential_conflict`    |
-| `running`         | wait 事件与身份证明确认退出                       | 持久化退出观察                         | `codex_exited`                       |
-| `running`         | 同一 boot_id、PID、ticks、identity 均匹配         | 更新仅健康/恢复审计，不重启            | `running`                            |
-| `running`         | boot_id 变化且无可确认原进程                      | 停止把 PID 当活动；重估 Runtime Hash   | `codex_exited` 或 `committing_auth`  |
-| `running`         | 身份无法确认                                      | 不杀进程、不签回，记录人工原因         | `failed`                             |
-| `codex_exited`    | Runtime 文件可验证                                | 记录 commit intent                     | `committing_auth`                    |
-| `codex_exited`    | Runtime 缺失/损坏且无安全结论                     | 隔离并记录                             | `failed`                             |
-| `committing_auth` | Hash 决策允许 Vault 原子写入且目录持久化          | 记录已提交 Vault Hash                  | `auth_committed`                     |
-| `committing_auth` | Vault 与 Runtime 都变化                           | 保存所有关键副本，禁止覆盖             | `credential_conflict`                |
-| `committing_auth` | Hash/权限/I/O/目录持久化失败                      | 保留诊断和副本                         | `failed`                             |
-| `auth_committed`  | Runtime 凭证和临时文件已清理                      | 持久化清理证据                         | `cleaned`                            |
-| `auth_committed`  | Vault 目标不可验证或 Runtime 清理不安全           | 不继续删除                             | `failed`                             |
-| `cleaned`         | 正常路径释放 Project 再 Account Lock 后写最终记录 | 记录正常完成                           | `finished`                           |
-| `cleaned`         | 崩溃后恢复确认安全收口                            | 记录恢复时间和尝试次数                 | `recovered`                          |
-| `failed`          | 人工修复后显式 `recover` 有安全证据               | 只做已证明的清理/冲突保留并追加审计    | `recovered` 或 `credential_conflict` |
-| 任意状态          | 同一 transaction_id 的同一已完成事件              | 验证前置 Hash/状态，执行零或一次操作   | 原状态或已到达后继                   |
+| From              | 事件/守卫                                         | 动作                                           | To                                  |
+| ----------------- | ------------------------------------------------- | ---------------------------------------------- | ----------------------------------- |
+| 无                | 双锁已获、事务记录成功                            | 写入最小事务元数据                             | `preparing`                         |
+| `preparing`       | checkout 原子完成且 Runtime 验证                  | 写入 checkout Hash 和状态                      | `checked_out`                       |
+| `preparing`       | 未生成最终 Runtime 文件，安全清理                 | 删除受控临时文件、保留审计                     | `recovered`                         |
+| `preparing`       | 最终文件/临时文件无法安全判定                     | 隔离可疑文件、记录错误                         | `failed`                            |
+| `checked_out`     | Runner/Codex 身份完整且状态持久化                 | 写 PID、boot_id、start ticks、identity         | `running`                           |
+| `checked_out`     | 无原进程，Runtime 文件完整                        | 进入 Hash/commit 决策                          | `committing_auth`                   |
+| `checked_out`     | 文件损坏、身份冲突或不安全路径                    | 保留副本、记录原因                             | `failed` 或 `credential_conflict`   |
+| `running`         | wait 事件与身份证明确认退出                       | 持久化退出观察                                 | `codex_exited`                      |
+| `running`         | 同一 boot_id、PID、ticks、identity 均匹配         | 更新仅健康/恢复审计，不重启                    | `running`                           |
+| `running`         | boot_id 变化且无可确认原进程                      | 停止把 PID 当活动；重估 Runtime Hash           | `codex_exited` 或 `committing_auth` |
+| `running`         | 身份无法确认                                      | 不杀进程、不签回，记录人工原因                 | `failed`                            |
+| `codex_exited`    | Runtime 文件可验证                                | 记录 commit intent                             | `committing_auth`                   |
+| `codex_exited`    | Runtime 缺失/损坏且无安全结论                     | 隔离并记录                                     | `failed`                            |
+| `committing_auth` | Hash 决策允许 Vault 原子写入且目录持久化          | 记录已提交 Vault Hash                          | `auth_committed`                    |
+| `committing_auth` | Vault 与 Runtime 都变化                           | 保存所有关键副本，禁止覆盖                     | `credential_conflict`               |
+| `committing_auth` | Hash/权限/I/O/目录持久化失败                      | 保留诊断和副本                                 | `failed`                            |
+| `auth_committed`  | Runtime 凭证和临时文件已清理                      | 持久化清理证据                                 | `cleaned`                           |
+| `auth_committed`  | Vault 目标不可验证或 Runtime 清理不安全           | 不继续删除                                     | `failed`                            |
+| `cleaned`         | 正常路径释放 Project 再 Account Lock 后写最终记录 | 记录正常完成                                   | `finished`                          |
+| `cleaned`         | 崩溃后恢复确认安全收口                            | 记录恢复时间和尝试次数                         | `recovered`                         |
+| `failed`          | 人工修复后显式 `recover` 有安全证据               | 新建关联 RecoveryAttempt；不改写旧 transaction | `failed`（旧记录保持不变）          |
+| 任意状态          | 同一 transaction_id 的同一已完成事件              | 验证前置 Hash/状态，执行零或一次操作           | 原状态或已到达后继                  |
 
-不允许的例子包括：`running → finished`、`checked_out → finished`、`credential_conflict → auth_committed`、`failed → running`、`finished → 任意非终态`。新 Launch 必须创建新的 transaction，不得复活旧终态事务。
+不允许的例子包括：`running → finished`、`checked_out → finished`、`credential_conflict → auth_committed`、`failed → running`、`failed → recovered`、`failed → credential_conflict`、`finished → 任意非终态`。新 Launch 必须创建新的 transaction，不得复活旧终态事务。人工 Recovery 的 outcome 属于新建关联记录，不能伪造旧 transaction 的终态。
 
 ## 4. 持久事务概念字段
 
@@ -76,10 +76,10 @@
 | `vault_hash_before_checkout`                          | 签出前 Vault 内容 Hash                                     |
 | `runtime_hash_at_checkout`                            | checkout 完成后的 Runtime Hash                             |
 | `runtime_hash_at_recovery` / `vault_hash_at_recovery` | Recovery 决策时重新计算的 Hash                             |
-| `credential_backup_path`                              | 受控、权限受限的冲突/备份位置引用；不能是任意用户路径      |
+| `credential_backup_reference`                         | 受控、权限受限的冲突/备份位置相对引用；不能是任意用户路径  |
 | `created_at` / `updated_at`                           | 创建与最后耐久化变更时间                                   |
 | `last_error_code` / `last_error_message_redacted`     | 稳定分类与脱敏摘要                                         |
-| `recovery_attempts` / `recovered_at`                  | 有界重试和最终恢复审计                                     |
+| `recovery_attempts` / `recovered_at`                  | 自动恢复摘要；人工恢复的逐次审计在独立 RecoveryAttempt 中  |
 | `schema_version`                                      | 未来持久化格式兼容闸门                                     |
 
 ## 5. 进程身份验证
@@ -99,7 +99,7 @@
 
 1. 初始化受控数据目录，验证所有权、模式和无非预期符号链接。
 2. 验证 SQLite/事务存储版本可读；无法安全读时保留原文件并进入人工恢复。
-3. 扫描所有非 `finished`、非 `recovered` 的 transaction。
+3. 扫描所有非终态 transaction，并列出终态 transaction 的未解决 RecoveryIncident；`failed` 只供诊断或显式人工尝试，不自动改写。
 4. 扫描受管 tmux Session，并区分受管身份和仅同名的未知 Session。
 5. 以固定 **Account → Project** 顺序尝试检查/获得相关锁；真实活动锁禁止抢占。
 6. 读取当前 Linux `boot_id`。
@@ -108,21 +108,21 @@
 9. 计算 Runtime 与 Vault Hash，读取交易的签出前/checkout Hash。
 10. 将事务分类为：原 Codex 仍运行、可恢复监督、可自动 commit、可安全清理、`credential_conflict` 或 `failed`。
 11. 只执行与该分类一致的幂等动作；每一次文件改变重新持久化事务。
-12. 记录 `recovered`、`credential_conflict` 或 `failed`，包括尝试次数和脱敏错误类别。
+12. 对非终态 transaction 记录 `recovered`、`credential_conflict` 或 `failed`；对已终态的人工操作追加 RecoveryAttempt，包括尝试次数和脱敏错误类别。
 13. 通过 GUI/CLI 的状态/诊断接口展示结果与下一步，不展示 Token 或原始凭证。
 
 ## 7. Hash 冲突决策矩阵
 
-| 情形                                  | 证据与决策                                                                                                                 | 必须保留/禁止动作                                                                                 |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| A. Vault 未变化，Runtime 有更新       | `vault_hash_at_recovery == vault_hash_before_checkout` 且 Runtime 与 checkout Hash 不同且完整；通常允许 Runtime 原子签回。 | 先保留签出前备份或可审计 Hash；成功后进入 `auth_committed`。                                      |
-| B. Vault 未变化，Runtime 与原签出一致 | 两者没有新凭证更新；允许清理或完成事务。                                                                                   | 不必无意义重写 Vault；保留事务审计后 `cleaned`。                                                  |
-| C. Vault 已变化，Runtime 未变化       | Runtime 等于 checkout Hash，而 Vault 与签出前不同；不得覆盖新的 Vault。                                                    | 可验证地清理遗留 Runtime，保留审计；不得声称 Runtime 已签回。                                     |
-| D. Vault 已变化，Runtime 也变化       | 两个版本均可能是合法 refresh，且与签出前不同。                                                                             | 进入 `credential_conflict`；保留当前 Vault、Runtime 遗留凭证和签出前备份或 Hash；绝不自动选胜者。 |
-| E. Runtime 缺失                       | 结合状态、Vault Hash、进程身份判断：运行身份可信时不能假定退出；无进程且 Vault 无需写入时才可清理。                        | 不得伪造签回成功；证据不足为 `failed`。                                                           |
-| F. Runtime `auth.json` 损坏           | 文件类型、权限、内容完整性或 Hash 计算失败。                                                                               | 隔离损坏文件并保留 Vault；绝不写入 Vault；进入 `failed` 或需人工处理的冲突。                      |
+| 情形                                  | 证据与决策                                                                                                                 | 必须保留/禁止动作                                                                                                                                                                              |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Vault 未变化，Runtime 有更新       | `vault_hash_at_recovery == vault_hash_before_checkout` 且 Runtime 与 checkout Hash 不同且完整；通常允许 Runtime 原子签回。 | 先保留签出前备份或可审计 Hash；成功后进入 `auth_committed`。                                                                                                                                   |
+| B. Vault 未变化，Runtime 与原签出一致 | 两者没有新凭证更新；允许清理或完成事务。                                                                                   | 不必无意义重写 Vault；保留事务审计后 `cleaned`。                                                                                                                                               |
+| C. Vault 已变化，Runtime 未变化       | Runtime 等于 checkout Hash，而 Vault 与签出前不同；不得覆盖新的 Vault。                                                    | 仅在确认原 Codex/Runner 已不存在、完成 boot_id 与进程身份检查、Runtime Hash 等于签出基线、确认不存在 Runtime 更新、保留审计记录且清理可幂等时，才可清理遗留 Runtime；不得声称 Runtime 已签回。 |
+| D. Vault 已变化，Runtime 也变化       | 两个版本均可能是合法 refresh，且与签出前不同。                                                                             | 进入 `credential_conflict`；保留当前 Vault、Runtime 遗留凭证和签出前备份或 Hash；绝不自动选胜者。                                                                                              |
+| E. Runtime 缺失                       | 结合状态、Vault Hash、进程身份判断：运行身份可信时不能假定退出；无进程且 Vault 无需写入时才可清理。                        | 不得伪造签回成功；证据不足为 `failed`。                                                                                                                                                        |
+| F. Runtime `auth.json` 损坏           | 文件类型、权限、内容完整性或 Hash 计算失败。                                                                               | 隔离损坏文件并保留 Vault；绝不写入 Vault；进入 `failed` 或需人工处理的冲突。                                                                                                                   |
 
-Hash 是冲突检测证据，不是凭证正确性的排序依据。任何人工处理应要求重新登录或明确用户选择，并形成新的审计动作；不修改已终态 transaction 的历史结论。
+Hash 是冲突检测证据，不是凭证正确性的排序依据。任何人工处理应要求重新登录或明确用户选择，并形成新的 RecoveryAttempt/Incident 审计动作；不修改已终态 transaction 的历史结论。
 
 ## 8. 原子文件操作不变量
 
@@ -158,7 +158,7 @@ Hash 是冲突检测证据，不是凭证正确性的排序依据。任何人工
 
 ## 10. 重试、幂等与故障注入
 
-同一 `transaction_id` 的 Recovery 可以重复执行。每次写入 Vault 前都重新验证状态/Hash；每次删除 Runtime 前都确认 Vault 目标副本存在；恢复尝试递增并保留脱敏错误类别。达到实现时冻结的有限上限后，必须进入 `failed` 人工处理，而不是无限循环。重试不能重复覆盖 Vault、重复删除唯一凭证副本或把 `credential_conflict` 当作已解决。
+非终态 `transaction_id` 的自动 Recovery 可以重复执行。每次写入 Vault 前都重新验证状态/Hash；每次删除 Runtime 前都确认 Vault 目标副本存在；恢复尝试递增并保留脱敏错误类别。达到实现时冻结的有限上限后，必须进入不可变 `failed` 人工处理，而不是无限循环。此后每次人工动作新建 RecoveryAttempt；重试不能重复覆盖 Vault、重复删除唯一凭证副本或把 `credential_conflict` 当作已解决。
 
 | 故障注入                              | 预期终态/下一状态                        | 验收不变量                               |
 | ------------------------------------- | ---------------------------------------- | ---------------------------------------- |

@@ -11,13 +11,17 @@ ADR 记录影响 Muxlane 长期边界的架构决策。它们是设计依据，�
 
 ## 索引
 
-| ADR                                                          | 状态     | 标题                                |
-| ------------------------------------------------------------ | -------- | ----------------------------------- |
-| [0001](0001-windows-gui-wsl-control-plane.md)                | Proposed | Windows GUI 与 WSL Control Plane    |
-| [0002](0002-project-scoped-codex-home.md)                    | Proposed | Project-scoped CODEX_HOME           |
-| [0003](0003-exclusive-project-and-account-locks.md)          | Proposed | 排他的 Project Lock 与 Account Lock |
-| [0004](0004-json-rpc-over-local-transport.md)                | Proposed | 本地传输上的版本化 JSON-RPC         |
-| [0005](0005-atomic-credential-checkout-and-commit.md)        | Proposed | 原子 Credential Checkout 与 Commit  |
-| [0006](0006-durable-launch-transaction-journal.md)           | Proposed | Durable Launch Transaction Journal  |
-| [0007](0007-process-identity-with-boot-id-and-start-time.md) | Proposed | 使用 boot_id 与启动时间的进程身份   |
-| [0008](0008-never-auto-resolve-credential-conflicts.md)      | Proposed | 绝不自动解决 Credential Conflict    |
+| ADR                                                          | 状态     | 标题                                       |
+| ------------------------------------------------------------ | -------- | ------------------------------------------ |
+| [0001](0001-windows-gui-wsl-control-plane.md)                | Proposed | Windows GUI 与 WSL Control Plane           |
+| [0002](0002-project-scoped-codex-home.md)                    | Proposed | Project-scoped CODEX_HOME                  |
+| [0003](0003-exclusive-project-and-account-locks.md)          | Proposed | 排他的 Project Lock 与 Account Lock        |
+| [0004](0004-json-rpc-over-local-transport.md)                | Proposed | 本地传输上的版本化 JSON-RPC                |
+| [0005](0005-atomic-credential-checkout-and-commit.md)        | Proposed | 原子 Credential Checkout 与 Commit         |
+| [0006](0006-durable-launch-transaction-journal.md)           | Proposed | Durable Launch Transaction Journal         |
+| [0007](0007-process-identity-with-boot-id-and-start-time.md) | Proposed | 使用 boot_id 与启动时间的进程身份          |
+| [0008](0008-never-auto-resolve-credential-conflicts.md)      | Proposed | 绝不自动解决 Credential Conflict           |
+| [0009](0009-sqlite-for-metadata-not-credentials.md)          | Proposed | SQLite for Metadata, Not Credentials       |
+| [0010](0010-versioned-capability-negotiation.md)             | Proposed | Versioned Capability Negotiation           |
+| [0011](0011-separate-control-and-terminal-data-planes.md)    | Proposed | Separate Control and Terminal Data Planes  |
+| [0012](0012-forward-only-versioned-database-migrations.md)   | Proposed | Forward-only Versioned Database Migrations |

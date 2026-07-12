@@ -49,6 +49,9 @@ docs/                      架构、ADR 与研究文档入口
 - [威胁模型](docs/THREAT_MODEL.md)：阶段 1B 的资产、边界、攻击路径与安全测试映射。
 - [Runtime 生命周期](docs/RUNTIME_LIFECYCLE.md)：阶段 1B 的受管 Launch、停止、GUI 与 Daemon 生命周期。
 - [持久恢复状态机](docs/RECOVERY_STATE_MACHINE.md)：阶段 1B 的事务状态、Hash 冲突和幂等 Recovery。
+- [逻辑控制协议](docs/PROTOCOL.md)：阶段 1C 的 Control Plane、Terminal Data Plane 和能力协商候选。
+- [逻辑数据模型](docs/DATA_MODEL.md)：阶段 1C 的实体、事实来源、SQLite 边界和迁移原则。
+- [兼容策略](docs/COMPATIBILITY.md)：阶段 1C 的支持范围、能力探测和验证矩阵。
 - [架构决策记录](docs/adr/README.md)：当前冻结候选的长期决策。
 - [架构摘要](ARCHITECTURE.md)：上述文档的根目录入口。
 
@@ -107,7 +110,7 @@ cargo run -p muxlaned -- --version
 | 7    | 配置资产治理           |
 | 8    | 发布、升级与运维完善   |
 
-阶段 1A 冻结需求、总体架构和 ADR 候选；阶段 1B 冻结威胁模型、Runtime 生命周期和恢复状态机候选。具体协议、SQLite schema 和持久化实现仍须按后续阶段验证。
+阶段 1A 冻结需求、总体架构和 ADR 候选；阶段 1B 冻结威胁模型、Runtime 生命周期和恢复状态机候选；阶段 1C 冻结逻辑协议、数据模型和兼容策略候选。具体桥接、SQLite schema 和持久化实现仍须按后续阶段验证。
 
 ## 贡献
 

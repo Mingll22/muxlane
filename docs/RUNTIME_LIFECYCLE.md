@@ -15,7 +15,7 @@
 
 | 术语                        | 定义                                                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Project                     | 已注册的工作目录及稳定随机 Project ID；其 Runtime 永久归属该 Project。                                                      |
+| Project                     | 已注册的工作目录及稳定、路径规范化 hash 派生的 Project ID；其 Runtime 永久归属该 Project，具体归一化仍待 POC。              |
 | Account                     | 用户拥有的账号元数据和唯一 Account Vault；不代表团队共享或账号池。                                                          |
 | Project Runtime             | `~/.local/share/muxlane/projects/<project-id>/codex-home`，存放 Project 的 `CODEX_HOME` 状态；活动 `auth.json` 仅暂存于此。 |
 | Account Vault               | `~/.local/share/muxlane/accounts/<account-id>/`；其 `auth.json` 为长期凭证副本，目录目标权限为 `0700`。                     |
