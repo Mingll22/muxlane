@@ -1,27 +1,15 @@
-# 阶段 0 架构边界
+# Muxlane 架构入口
 
-本文描述当前仓库的工程边界，不是最终系统架构，也不定义正式运行时协议、状态机或领域数据模型。
+Muxlane 当前处于阶段 1 的设计冻结工作。阶段 0 的 monorepo、质量工具链和最小桌面外壳已经存在；Account、Project Runtime、Daemon、终端、凭证和协议等业务能力尚未实现。
 
-## 当前结构
+正式总体架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，需求范围见 [docs/PRD.md](docs/PRD.md)，长期决策见 [docs/adr/README.md](docs/adr/README.md)。
 
-| 路径                      | 当前职责                                            | 阶段 0 明确不包含                           |
-| ------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| `apps/desktop`            | Tauri 2、React、TypeScript 和 Ant Design 的桌面空壳 | 账号、项目、终端或额度 UI                   |
-| `apps/desktop/src-tauri`  | 最小 Tauri Rust 入口与最小能力配置                  | 自定义 IPC、shell、文件系统、网络或进程权限 |
-| `crates/muxlane-core`     | 共享核心 crate 边界与非业务构建元数据               | Account、Project、Runtime 领域模型          |
-| `crates/muxlane-protocol` | 未来组件协议 crate 边界                             | JSON-RPC 方法、wire type 或序列化契约       |
-| `crates/muxlaned`         | 将来 WSL daemon 的二进制名称和元数据输出            | daemon 启动、服务、tmux 或 WSL 控制         |
-| `crates/muxlane-cli`      | 将来 WSL CLI 的二进制名称和元数据输出               | project、account、recover 等命令            |
+## 架构摘要
 
-## 后续设计入口
+- `Muxlane.exe` 是 Windows GUI；WSL 默认发行版内的单一 `muxlaned` 是 Runtime Control Plane。
+- 每个 Project 设计为拥有永久的 Project Runtime 和 Project-scoped `CODEX_HOME`；Account 设计为独立 Account Vault。
+- Launch Transaction 同时要求 Project Lock 与 Account Lock；同一 Account 或同一 Project 均不能并行。
+- GUI 关闭不应结束 Daemon、`tmux` 或受管 Codex 任务；`muxlane` CLI 设计为独立诊断与 Recovery 入口。
+- GUI 到 Daemon 的控制面设计为版本化本地 JSON-RPC；Windows 到 WSL 的具体桥接仍待阶段 3 POC 验证。
 
-以下内容必须在对应阶段通过 ADR 和可验证实现正式设计：
-
-- Account、Project、Runtime 的领域边界和持久化模型。
-- `CODEX_HOME` 的项目隔离策略与凭证生命周期。
-- daemon 与 GUI/CLI 的协议、认证边界和错误模型。
-- 启动事务、锁、崩溃恢复与冲突处理。
-- tmux、终端桥接、Codex CLI/App Server 的运行边界。
-- 配置资产、Skills、MCP 与 Plugins 的治理模型。
-
-阶段 0 不使用空 trait、虚构数据或占位 RPC 来预先冻结这些决策。
+设计目标不等于已交付功能。MVP 范围仅面向 Windows 10/11、WSL2、默认发行版和 Windows x64。
