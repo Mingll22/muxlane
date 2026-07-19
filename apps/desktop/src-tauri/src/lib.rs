@@ -8,9 +8,6 @@
 mod lifecycle;
 mod runtime;
 
-#[cfg(test)]
-mod phase3;
-
 use tauri::Manager;
 
 /// Starts the desktop shell with the formal control and Terminal data planes.
