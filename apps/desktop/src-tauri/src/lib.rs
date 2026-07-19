@@ -9,6 +9,8 @@ mod lifecycle;
 mod phase3;
 mod runtime;
 
+use tauri::Manager;
+
 /// Starts the desktop shell with Phase 3's finite terminal POC command surface.
 pub fn run() -> tauri::Result<()> {
     tauri::Builder::default()

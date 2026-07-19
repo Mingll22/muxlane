@@ -27,7 +27,7 @@ impl LifecycleState {
     }
 }
 
-pub fn setup(app: &mut App) -> tauri::Result<()> {
+pub fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let show = MenuItem::with_id(app, "show", "打开 Muxlane", true, None::<&str>)?;
     let background = MenuItem::with_id(app, "background", "保持后台运行", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出…", true, None::<&str>)?;
