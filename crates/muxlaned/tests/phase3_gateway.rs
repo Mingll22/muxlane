@@ -1,5 +1,5 @@
-#![cfg(target_os = "linux")]
 #![cfg_attr(not(target_os = "linux"), allow(unused_crate_dependencies))]
+#![cfg(target_os = "linux")]
 #![forbid(unsafe_code)]
 
 use std::{
