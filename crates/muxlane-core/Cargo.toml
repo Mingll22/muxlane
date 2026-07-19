@@ -6,7 +6,20 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Shared non-domain foundations for Muxlane"
+description = "Muxlane runtime control-plane domain and persistence"
+
+[dependencies]
+fs4.workspace = true
+nix.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"
 
 [lints]
 workspace = true

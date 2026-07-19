@@ -6,10 +6,14 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Future protocol boundary for Muxlane"
+description = "Versioned local control protocol for Muxlane"
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+muxlane-core = { path = "../muxlane-core" }
 
 [dev-dependencies]
 serde_json.workspace = true

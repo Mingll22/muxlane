@@ -1,8 +1,24 @@
-//! Shared non-domain foundations for Muxlane.
-//!
-//! Phase 0 establishes only the crate boundary. Domain models are intentionally deferred.
+//! Durable domain, persistence, credential, recovery, and terminal foundations
+//! for the Muxlane WSL runtime control plane.
 
 #![forbid(unsafe_code)]
+
+pub mod credential;
+pub mod diagnostics;
+pub mod error;
+pub mod incident;
+pub mod layout;
+pub mod lock;
+pub mod model;
+pub mod process;
+pub mod recovery;
+pub mod service;
+pub mod session;
+pub mod storage;
+pub mod terminal;
+pub mod usage;
+
+pub use error::{CoreError, CoreResult};
 
 /// Stable package identifier for build and integration checks.
 pub const CRATE_IDENTIFIER: &str = "muxlane-core";

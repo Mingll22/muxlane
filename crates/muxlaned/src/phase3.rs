@@ -1,7 +1,8 @@
-//! Non-production Phase 3 terminal gateway.
+//! Bounded tmux Control Mode engine and retained Phase 3 compatibility adapter.
 //!
-//! This module owns a deliberately small, stdio-only bridge to a dedicated tmux
-//! socket. It is not a daemon, persistent Runtime, or stable production protocol.
+//! `run_gateway` and synthetic commands remain non-production POC surfaces. The
+//! proven Control Mode engine is also wrapped by `terminal_data` through a
+//! separate formal protocol and the production Runtime tmux socket.
 
 use std::{
     io::{self, BufRead, BufReader, Read, Write},
@@ -26,7 +27,7 @@ const MAX_COLUMNS: u16 = 320;
 const MIN_ROWS: u16 = 5;
 const MAX_ROWS: u16 = 160;
 const HISTORY_LINES: i32 = 300;
-const MANAGED_PREFIX: &str = "mlp3-";
+const POC_MANAGED_PREFIX: &str = "mlp3-";
 const CONTROL_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 const BOOTSTRAP_START_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_BUFFERED_CONTROL_LINES: usize = 1024;
@@ -38,7 +39,7 @@ const OVERFLOW_LINE_BYTES: u8 = 1;
 const OVERFLOW_BUFFER_BYTES: u8 = 2;
 const OVERFLOW_BUFFER_LINES: u8 = 3;
 
-type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
+pub(crate) type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 
 #[derive(Debug)]
 struct ControlLine {
@@ -56,6 +57,7 @@ impl Drop for ControlLine {
 #[derive(Debug)]
 pub struct Gateway {
     socket: String,
+    managed_prefix: String,
     connection_id: String,
     next_attachment_id: u64,
     attached: Option<Attachment>,
@@ -103,12 +105,22 @@ impl Drop for ChildCleanupGuard {
 
 impl Gateway {
     pub fn new(socket: String) -> Result<Self, Phase3Error> {
+        Self::new_with_prefix(socket, POC_MANAGED_PREFIX.to_owned())
+    }
+
+    pub(crate) fn new_with_prefix(
+        socket: String,
+        managed_prefix: String,
+    ) -> Result<Self, Phase3Error> {
         validate_socket(&socket)?;
+        if !matches!(managed_prefix.as_str(), "mlp3-" | "muxlane-") {
+            return Err(validation_error("invalid managed session prefix"));
+        }
         let since_epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| internal_error("system clock is before the Unix epoch"))?;
         let connection_id = format!("p{}-{}", std::process::id(), since_epoch.as_nanos());
-        Ok(Self { socket, connection_id, next_attachment_id: 1, attached: None })
+        Ok(Self { socket, managed_prefix, connection_id, next_attachment_id: 1, attached: None })
     }
 
     pub fn handle(
@@ -122,7 +134,7 @@ impl Gateway {
                 tmux_version: self.tmux_version()?,
             }),
             Phase3Request::CreateSyntheticSession { project_id } => {
-                let session_name = session_name(&project_id)?;
+                let session_name = session_name(&self.managed_prefix, &project_id)?;
                 self.create_synthetic_session(&session_name)?;
                 Ok(Phase3Response::Acknowledged)
             }
@@ -130,7 +142,7 @@ impl Gateway {
                 Ok(Phase3Response::Sessions { sessions: self.list_sessions()? })
             }
             Phase3Request::CreateWindow { project_id, name } => {
-                let session_name = session_name(&project_id)?;
+                let session_name = session_name(&self.managed_prefix, &project_id)?;
                 validate_window_name(&name)?;
                 self.ensure_session_exists(&session_name)?;
                 self.create_synthetic_window(&session_name, &project_id, &name)?;
@@ -176,7 +188,7 @@ impl Gateway {
                 Ok(Phase3Response::Acknowledged)
             }
             Phase3Request::CleanupSession { project_id } => {
-                let name = session_name(&project_id)?;
+                let name = session_name(&self.managed_prefix, &project_id)?;
                 if self
                     .attached
                     .as_ref()
@@ -191,6 +203,10 @@ impl Gateway {
                 attached: self.attached.as_ref().map(|attachment| attachment.stream.clone()),
             }),
         }
+    }
+
+    pub(crate) fn disconnect(&mut self) -> Result<(), Phase3Error> {
+        self.detach()
     }
 
     fn tmux_version(&self) -> Result<String, Phase3Error> {
@@ -272,7 +288,7 @@ impl Gateway {
             .lines()
             .filter_map(|line| line.split_once('\t'))
             .filter_map(|(name, id)| {
-                name.strip_prefix(MANAGED_PREFIX).and_then(|project_id| {
+                name.strip_prefix(&self.managed_prefix).and_then(|project_id| {
                     validate_project_id(project_id).ok().map(|()| ManagedSession {
                         project_id: project_id.to_owned(),
                         session_name: name.to_owned(),
@@ -285,7 +301,7 @@ impl Gateway {
     }
 
     fn list_windows(&self, project_id: &str) -> Result<Vec<ManagedWindow>, Phase3Error> {
-        let name = session_name(project_id)?;
+        let name = session_name(&self.managed_prefix, project_id)?;
         self.ensure_session_exists(&name)?;
         let output = self.tmux_output([
             "list-windows",
@@ -351,7 +367,7 @@ impl Gateway {
         );
 
         wait_for_command_block(&control_lines)?;
-        if self.control_client_count()? != 1 {
+        if self.control_client_count(&target)? != 1 {
             return Err(conflict_error("managed pane already has another tmux client"));
         }
         write_control_command(&control_stdin, &format!("refresh-client -A '{pane_id}:off'"))?;
@@ -487,7 +503,11 @@ impl Gateway {
         if !attachment.bootstrap_started.load(Ordering::Acquire) {
             return Err(state_error("terminal stream has not started"));
         }
-        let target = target_for_ids(&attachment.stream.project_id, &attachment.stream.window_id)?;
+        let target = target_for_ids(
+            &self.managed_prefix,
+            &attachment.stream.project_id,
+            &attachment.stream.window_id,
+        )?;
         let mut control_stdin = attachment
             .control_stdin
             .lock()
@@ -515,7 +535,11 @@ impl Gateway {
         if !attachment.bootstrap_started.load(Ordering::Acquire) {
             return Err(state_error("terminal stream has not started"));
         }
-        let target = target_for_ids(&attachment.stream.project_id, &attachment.stream.window_id)?;
+        let target = target_for_ids(
+            &self.managed_prefix,
+            &attachment.stream.project_id,
+            &attachment.stream.window_id,
+        )?;
         self.tmux_status([
             "resize-window",
             "-t",
@@ -530,7 +554,7 @@ impl Gateway {
     fn target_for(&self, project_id: &str, window_id: &str) -> Result<String, Phase3Error> {
         let windows = self.list_windows(project_id)?;
         if windows.iter().any(|window| window.id == window_id) {
-            target_for_ids(project_id, window_id)
+            target_for_ids(&self.managed_prefix, project_id, window_id)
         } else {
             Err(not_found_error("managed window does not exist"))
         }
@@ -547,9 +571,9 @@ impl Gateway {
         Ok(pane_id.to_owned())
     }
 
-    fn control_client_count(&self) -> Result<usize, Phase3Error> {
-        let output = self.tmux_output(["list-clients", "-F", "#{client_control_mode}"])?;
-        Ok(output.lines().count())
+    fn control_client_count(&self, target: &str) -> Result<usize, Phase3Error> {
+        let output = self.tmux_output(["list-clients", "-F", "#{session_name}:#{window_id}"])?;
+        Ok(output.lines().filter(|line| *line == target).count())
     }
 
     fn ensure_session_exists(&self, name: &str) -> Result<(), Phase3Error> {
@@ -875,13 +899,13 @@ fn write_frame(output: &SharedWriter, frame: &Phase3Frame) -> Result<(), Phase3E
     output.flush().map_err(|_| state_error("POC bridge output disconnected"))
 }
 
-fn session_name(project_id: &str) -> Result<String, Phase3Error> {
+fn session_name(prefix: &str, project_id: &str) -> Result<String, Phase3Error> {
     validate_project_id(project_id)?;
-    Ok(format!("{MANAGED_PREFIX}{project_id}"))
+    Ok(format!("{prefix}{project_id}"))
 }
 
-fn target_for_ids(project_id: &str, window_id: &str) -> Result<String, Phase3Error> {
-    let session = session_name(project_id)?;
+fn target_for_ids(prefix: &str, project_id: &str, window_id: &str) -> Result<String, Phase3Error> {
+    let session = session_name(prefix, project_id)?;
     validate_window_id(window_id)?;
     Ok(format!("{session}:{window_id}"))
 }
@@ -912,7 +936,7 @@ fn validate_window_name(value: &str) -> Result<(), Phase3Error> {
 fn validate_slug(value: &str, maximum: usize, label: &str) -> Result<(), Phase3Error> {
     let valid = !value.is_empty()
         && value.len() <= maximum
-        && value.as_bytes()[0].is_ascii_lowercase()
+        && (value.as_bytes()[0].is_ascii_lowercase() || value.as_bytes()[0].is_ascii_digit())
         && value
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
@@ -1001,7 +1025,7 @@ mod tests {
         assert!(validate_window_id("@17;kill-server").is_err());
         assert!(validate_pane_id("%17").is_ok());
         assert!(validate_pane_id("%17:kill").is_err());
-        assert!(target_for_ids("project-a", "@17").is_ok());
+        assert!(target_for_ids("mlp3-", "project-a", "@17").is_ok());
     }
 
     #[test]

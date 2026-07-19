@@ -6,7 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Muxlane daemon foundation"
+description = "Muxlane WSL runtime control-plane daemon"
 
 [[bin]]
 name = "muxlaned"
@@ -14,8 +14,14 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
+muxlane-core = { path = "../muxlane-core" }
 muxlane-protocol = { path = "../muxlane-protocol" }
+nix.workspace = true
 serde_json.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"
 
 [lints]
 workspace = true
