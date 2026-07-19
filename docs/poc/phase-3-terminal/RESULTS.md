@@ -42,6 +42,7 @@ xterm.js → Tauri Host → wsl.exe → muxlaned Phase 3 Gateway → tmux Contro
 - Ctrl+C 关闭目标 `project-a/@1` synthetic 前台进程并产生 `stream_closed`；`@0`、`project-b/@2`、Gateway 和 Tauri 进程继续运行，随后 `@0` 仍可接收输入；
 - 正常 close、强制终止 GUI 进程、再次 close 后 tmux Session 均保留；未执行 `wsl --shutdown`，Docker 容器 ID 与健康状态保持；
 - 重开自动发现 `mlp3-project-a`/`mlp3-project-b` 并恢复 `project-a/@0`；一次恢复先收到 `history / 21535 bytes`，历史中存在关闭前 marker，随后恢复 live output；
+- 强制终止 active WSL Gateway 后，真实 Tauri UI 立即显示“终端连接已关闭”并清除当前 stream；点击 reconnect 会启动新 Gateway、恢复同一 Window 与 live output；
 - GUI 重复 reconnect 3 次，每次只观察到一个新的 Control Mode client，无 listener/xterm 重复注册症状。
 
 ## 多 Project / 多 Window
