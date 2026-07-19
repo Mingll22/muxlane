@@ -4,6 +4,10 @@ use std::{
     process::{Command, Stdio},
 };
 
+use nix::{
+    sys::signal::{self, Signal},
+    unistd::Pid,
+};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -12,7 +16,7 @@ use crate::{
     layout::{atomic_write_private, hex_sha256, validate_id},
     lock::LaunchLocks,
     model::{LaunchTransaction, Project, TransactionState},
-    process::inspect_process,
+    process::{boot_id, inspect_process, matches_recorded},
     storage::{Storage, now},
 };
 
@@ -246,6 +250,27 @@ pub fn archive_project(storage: &Storage, project_id: &str) -> CoreResult<Projec
         ));
     }
     storage.archive_project(project_id)
+}
+
+pub fn stop_launch(storage: &Storage, launch_id: &str) -> CoreResult<crate::model::LaunchView> {
+    validate_id(launch_id)?;
+    let transaction = storage.transaction_for_launch(launch_id)?;
+    if transaction.state.terminal() {
+        return storage.launch_view(launch_id);
+    }
+    let current_boot_id = boot_id()?;
+    if !matches_recorded(&transaction, false, &current_boot_id)? {
+        return Err(CoreError::new(
+            "PROCESS_IDENTITY_UNCONFIRMED",
+            "Codex process identity could not be confirmed",
+        ));
+    }
+    let pid = transaction
+        .codex_pid
+        .ok_or_else(|| CoreError::new("INVALID_STATE", "Codex process is not running"))?;
+    signal::kill(Pid::from_raw(pid as i32), Signal::SIGINT)
+        .map_err(|_| CoreError::new("PROCESS_IDENTITY_UNCONFIRMED", "Codex stop signal failed"))?;
+    storage.launch_view(launch_id)
 }
 
 #[cfg(test)]

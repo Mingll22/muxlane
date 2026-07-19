@@ -244,6 +244,93 @@ pub struct UsageRefreshResult {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ProjectSettings {
+    pub project_id: String,
+    pub runtime: String,
+    pub default_account_id: Option<String>,
+    pub default_model: String,
+    pub reasoning: String,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct TerminalPresetTemplate {
+    pub name: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CommandPresetTemplate {
+    pub name: String,
+    pub description: String,
+    pub terminal_kind: String,
+    pub working_directory: String,
+    pub command: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ProjectTemplate {
+    pub template_id: String,
+    pub name: String,
+    pub description: String,
+    pub default_model: String,
+    pub reasoning: String,
+    pub terminal_presets: Vec<TerminalPresetTemplate>,
+    pub command_presets: Vec<CommandPresetTemplate>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CommandPreset {
+    pub preset_id: String,
+    pub project_id: String,
+    pub name: String,
+    pub description: String,
+    pub terminal_kind: String,
+    pub working_directory: String,
+    pub command: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct InputHistory {
+    pub history_id: String,
+    pub project_id: String,
+    pub terminal_id: Option<String>,
+    pub thread_id: Option<String>,
+    pub kind: String,
+    pub input_text: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct WorkspaceEntry {
+    pub relative_path: String,
+    pub name: String,
+    pub kind: String,
+    pub size: u64,
+    pub modified_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct WorkspacePreview {
+    pub relative_path: String,
+    pub content: String,
+    pub line_count: usize,
+    pub truncated: bool,
+    pub modified_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct WorkspaceLocation {
+    pub relative_path: String,
+    pub canonical_wsl_path: String,
+    pub canonical_windows_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct CapabilityProbe {
     pub codex_version: String,
     pub schema_fingerprint: String,

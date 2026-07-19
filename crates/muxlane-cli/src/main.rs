@@ -29,6 +29,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum TopLevel {
+    #[command(hide = true)]
+    Control {
+        request_json: String,
+    },
     Doctor,
     Status,
     Daemon {
@@ -146,6 +150,9 @@ fn run(cli: Cli) -> Result<(), String> {
         return start_daemon();
     }
     let request = match cli.command {
+        TopLevel::Control { request_json } => {
+            serde_json::from_str(&request_json).map_err(|_| "INVALID_REQUEST".to_owned())?
+        }
         TopLevel::Doctor => ControlRequest::SystemHealth,
         TopLevel::Status => ControlRequest::SystemStatus,
         TopLevel::Daemon { command: DaemonCommand::Stop } => {

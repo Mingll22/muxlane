@@ -10,20 +10,24 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[cfg(target_os = "linux")]
-use muxlane_core::{
+pub use muxlane_core::{
     diagnostics::DiagnosticReceipt,
     model::{
-        Account, CapabilityProbe, LaunchView, Project, RecoveryIncident, RecoveryResult, Terminal,
-        ThreadIndex, UsageRefreshResult, UsageSnapshot,
+        Account, CapabilityProbe, CommandPreset, CommandPresetTemplate, InputHistory, LaunchView,
+        Project, ProjectSettings, ProjectTemplate, RecoveryIncident, RecoveryResult, Terminal,
+        TerminalPresetTemplate, ThreadIndex, UsageRefreshResult, UsageSnapshot, WorkspaceEntry,
+        WorkspaceLocation, WorkspacePreview,
     },
 };
 
 #[cfg(not(target_os = "linux"))]
 mod wire_model;
 #[cfg(not(target_os = "linux"))]
-use wire_model::{
-    Account, CapabilityProbe, DiagnosticReceipt, LaunchView, Project, RecoveryIncident,
-    RecoveryResult, Terminal, ThreadIndex, UsageRefreshResult, UsageSnapshot,
+pub use wire_model::{
+    Account, CapabilityProbe, CommandPreset, CommandPresetTemplate, DiagnosticReceipt,
+    InputHistory, LaunchView, Project, ProjectSettings, ProjectTemplate, RecoveryIncident,
+    RecoveryResult, Terminal, TerminalPresetTemplate, ThreadIndex, UsageRefreshResult,
+    UsageSnapshot, WorkspaceEntry, WorkspaceLocation, WorkspacePreview,
 };
 
 pub const PROTOCOL_MAJOR: u16 = 1;
@@ -38,6 +42,7 @@ pub const CAPABILITIES: &[&str] = &[
     "project.register.v1",
     "project.archive.v1",
     "launch.start.v1",
+    "launch.stop.v1",
     "launch.read.v1",
     "recovery.scan.v1",
     "recovery.incident.v1",
@@ -52,6 +57,11 @@ pub const CAPABILITIES: &[&str] = &[
     "usage.refresh.v1",
     "usage.batch.v1",
     "diagnostics.export.v1",
+    "workbench.settings.v1",
+    "workbench.template.v1",
+    "workbench.preset.v1",
+    "workbench.history.v1",
+    "workspace.read.v1",
 ];
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -122,6 +132,8 @@ pub enum ControlRequest {
     ProjectArchive { project_id: String, operation_id: String },
     #[serde(rename = "launch.start")]
     LaunchStart { account_id: String, project_id: String, operation_id: String },
+    #[serde(rename = "launch.stop")]
+    LaunchStop { launch_id: String, operation_id: String },
     #[serde(rename = "launch.list")]
     LaunchList,
     #[serde(rename = "recovery.scan")]
@@ -152,6 +164,80 @@ pub enum ControlRequest {
     UsageRefreshBatch { account_ids: Vec<String>, operation_id: String },
     #[serde(rename = "diagnostics.export")]
     DiagnosticsExport { operation_id: String },
+    #[serde(rename = "workbench.settings.read")]
+    WorkbenchSettingsRead { project_id: String },
+    #[serde(rename = "workbench.settings.save")]
+    WorkbenchSettingsSave {
+        project_id: String,
+        default_account_id: Option<String>,
+        default_model: String,
+        reasoning: String,
+        operation_id: String,
+    },
+    #[serde(rename = "workbench.template.list")]
+    WorkbenchTemplateList,
+    #[serde(rename = "workbench.template.save")]
+    WorkbenchTemplateSave {
+        template_id: Option<String>,
+        name: String,
+        description: String,
+        default_model: String,
+        reasoning: String,
+        terminal_presets: Vec<TerminalPresetTemplate>,
+        command_presets: Vec<CommandPresetTemplate>,
+        operation_id: String,
+    },
+    #[serde(rename = "workbench.template.copy")]
+    WorkbenchTemplateCopy { template_id: String, name: String, operation_id: String },
+    #[serde(rename = "workbench.template.apply")]
+    WorkbenchTemplateApply { project_id: String, template_id: String, operation_id: String },
+    #[serde(rename = "workbench.template.delete")]
+    WorkbenchTemplateDelete { template_id: String, operation_id: String },
+    #[serde(rename = "workbench.preset.list")]
+    WorkbenchPresetList { project_id: String },
+    #[serde(rename = "workbench.preset.save")]
+    WorkbenchPresetSave {
+        preset_id: Option<String>,
+        project_id: String,
+        name: String,
+        description: String,
+        terminal_kind: String,
+        working_directory: String,
+        command: String,
+        operation_id: String,
+    },
+    #[serde(rename = "workbench.preset.delete")]
+    WorkbenchPresetDelete { preset_id: String, operation_id: String },
+    #[serde(rename = "workbench.history.append")]
+    WorkbenchHistoryAppend {
+        project_id: String,
+        terminal_id: Option<String>,
+        thread_id: Option<String>,
+        kind: String,
+        input_text: String,
+        operation_id: String,
+    },
+    #[serde(rename = "workbench.history.search")]
+    WorkbenchHistorySearch {
+        project_id: String,
+        terminal_id: Option<String>,
+        thread_id: Option<String>,
+        kind: Option<String>,
+        query: String,
+        limit: u16,
+    },
+    #[serde(rename = "workbench.history.delete")]
+    WorkbenchHistoryDelete { history_id: String, operation_id: String },
+    #[serde(rename = "workbench.history.clear_project")]
+    WorkbenchHistoryClearProject { project_id: String, operation_id: String },
+    #[serde(rename = "workspace.list")]
+    WorkspaceList { project_id: String, relative_directory: String },
+    #[serde(rename = "workspace.search")]
+    WorkspaceSearch { project_id: String, query: String },
+    #[serde(rename = "workspace.preview")]
+    WorkspacePreview { project_id: String, relative_path: String },
+    #[serde(rename = "workspace.location")]
+    WorkspaceLocation { project_id: String, relative_path: String },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -186,6 +272,17 @@ pub enum ControlResponse {
     Usage(Option<UsageSnapshot>),
     UsageBatch(Vec<UsageRefreshResult>),
     Diagnostics(DiagnosticReceipt),
+    ProjectSettings(ProjectSettings),
+    ProjectTemplates(Vec<ProjectTemplate>),
+    ProjectTemplate(ProjectTemplate),
+    CommandPresets(Vec<CommandPreset>),
+    CommandPreset(CommandPreset),
+    InputHistory(Vec<InputHistory>),
+    InputHistoryEntry(InputHistory),
+    DeletedCount { count: u64 },
+    WorkspaceEntries(Vec<WorkspaceEntry>),
+    WorkspacePreview(WorkspacePreview),
+    WorkspaceLocation(WorkspaceLocation),
     Acknowledged,
 }
 

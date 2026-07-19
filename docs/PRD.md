@@ -7,14 +7,14 @@
 | 状态     | Frozen                                                        |
 | 对应阶段 | 阶段 1：需求与架构设计冻结                                    |
 | 维护者   | Mingll22 / Muxlane maintainers                                |
-| 最后更新 | 2026-07-12                                                    |
+| 最后更新 | 2026-07-20                                                    |
 | 变更原则 | 冻结设计只能通过新的 ADR 修订；未验证事实必须标为假设或 POC。 |
 
-本文件定义产品范围和可验收需求；[总体架构](ARCHITECTURE.md) 定义系统边界，ADR 记录长期取舍。阶段 1 只冻结设计，不能据此宣称业务能力已实现。
+本文件定义产品范围和可验收需求；[总体架构](ARCHITECTURE.md) 定义系统边界，ADR 记录长期取舍。Phase 7 范围由 [ADR-0013](adr/0013-reframe-phase-7-as-safe-local-workbench.md) 修订；当前实现状态以 [项目真相](PROJECT.md) 为准。
 
 ## 2. 产品概述
 
-Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台：`Windows GUI + WSL Runtime Control Plane + Project-scoped CODEX_HOME + Persistent Terminal Workspace + Account and Configuration Governance`。它为 Codex CLI 个人开发者提供项目级运行时隔离、持久 Terminal、多 Account 凭证顺序切换、额度查询、Recovery 与 Asset 治理。
+Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台：`Windows GUI + WSL Runtime Control Plane + Project-scoped CODEX_HOME + Persistent Terminal Workspace + Account and Configuration Governance`。它为 Codex CLI 个人开发者提供项目级运行时隔离、持久 Terminal、多 Account 凭证顺序切换、额度查询、Recovery 与安全本地工作台。
 
 目标用户是 Windows 10/11、WSL2、同时维护多个本地项目的重度终端用户。它不是团队共享账号池、出租或出售账号工具、云端凭证托管、自动账号轮换/额度规避工具、完整 IDE、代码分析平台或 SaaS。
 
@@ -29,11 +29,11 @@ Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台：`Windows G
 - 每个已注册 Project 设计为拥有永久、隔离且位于 WSL Linux 文件系统的 Project Runtime。
 - 一个运行中 Project 只能有一个受管 Codex 主实例；一个 Account 同时只能分配给一个运行中 Project。
 - GUI 重连设计为可恢复 Project、Terminal、屏幕缓冲、历史输出和实时日志；CLI 不依赖 GUI。
-- Account、Usage、Asset 与 Project 的操作设计为本地优先、可诊断且不保存 Token 到数据库。
+- Account、Usage、Project 与非秘密工作台配置的操作设计为本地优先、可诊断且不保存 Token 到数据库。
 
 ### 非目标
 
-不实现云端凭证托管、团队账号池、自动账号轮换、额度耗尽自动切号或规避限制；不做完整 IDE、LSP、Debugger、Git GUI 或 AI 自动补全。MVP 不支持多 WSL 发行版、macOS、原生 Linux GUI、Windows ARM、第一版完整自动更新或高级 Pane 编排。
+不实现云端凭证托管、团队账号池、自动账号轮换、额度耗尽自动切号或规避限制；不做完整 IDE、LSP、Debugger、Git GUI 或 AI 自动补全。Skills/MCP/Plugins/统一 Asset、CodeMirror、内嵌编辑和文件写入已明确延期。MVP 不支持多 WSL 发行版、macOS、原生 Linux GUI、Windows ARM、第一版完整自动更新或高级 Pane 编排。
 
 ## 5. 角色与核心场景
 
@@ -47,7 +47,7 @@ Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台：`Windows G
 | Codex 退出                    | 识别退出，执行 Credential Commit、清理活动凭证并更新状态。                       |
 | Windows/WSL 异常后 Recovery   | 依据事务、锁和进程身份执行幂等检查，不覆盖冲突凭证。                             |
 | Usage 查看                    | 在受限查询环境按需查询并显示窗口及本地缓存时间。                                 |
-| Project 归档                  | 保留注册、Runtime、Session、Terminal、日志和 Asset 配置，非立即物理删除。        |
+| Project 归档                  | 保留注册、Runtime、Session、Terminal、日志和工作台配置，非立即物理删除。         |
 | CLI 诊断                      | `doctor`、`status`、daemon 管理、列表、`recover`、诊断包导出均无需 GUI。         |
 
 ## 6. 功能需求
@@ -64,9 +64,10 @@ Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台：`Windows G
 | FR-RECOVERY-001    | Recovery 能检查中断事务、锁、进程身份和凭证 Hash；验收：重复执行不损坏状态或覆盖未知较新凭证，且只由新的安全 RecoveryAttempt 将关联 Incident 解析后解除启动阻断。 | P0 / 4        | PID 重用、WSL 重启和冲突保留必须处理。                                 | FR-CREDENTIAL-001              |
 | FR-TERMINAL-001    | Project 拥有一个 `tmux` Session，MVP 可创建多个 Window；验收：GUI 关闭后任务继续，重连显示受限历史和实时输出。                                                    | P0 / 3、5、6  | MVP 不支持 Pane；Terminal 输入经受控通道。                             | FR-RUNTIME-001                 |
 | FR-USAGE-001       | 按需查询 Account Usage；验收：展示 `windowDurationMins` 语义的窗口、缓存时间和 Asia/Shanghai 时间，不假定未验证字段。                                             | P1 / 5、6     | 独立 Query Home、并发限制、短期缓存；禁止用作自动切号。                | FR-ACCOUNT-001                 |
-| FR-ASSET-001       | 管理 Skill、MCP、Plugin、source、version、checksum、compatibility、enabled_projects、install_mode；验收：共享白名单与 Project 隔离可审计。                        | P1 / 7        | 不引入未验证来源或越权安装。                                           | FR-PROJECT-001                 |
-| FR-FILE-001        | 提供轻量文件树和 CodeMirror 6 查看/编辑；验收：Codex 主进程存在时内置编辑器只读。                                                                                 | P1 / 7        | 受限于 Project 目录和 Tauri Capability。                               | FR-RUNTIME-001                 |
-| FR-HISTORY-001     | 显示 Codex Session / Thread 与 Terminal 历史；验收：历史有上限且不上传 Prompt。                                                                                   | P1 / 6、7     | 本地保存、脱敏日志、可归档。                                           | FR-TERMINAL-001                |
+| FR-WORKBENCH-001   | 提供 Project/Terminal 切换、专注模式、非秘密模板与命令预设；验收：预设只由用户明确点击填入或执行。                                                                | P1 / 7        | 不自动执行仓库配置；参数与路径由 daemon 验证。                         | FR-PROJECT-001                 |
+| FR-FILE-001        | 提供 Project 目录树、搜索、定位和文本只读预览；验收：拒绝穿越、symlink、二进制和超限文件。                                                                        | P1 / 7        | 不含 CodeMirror、编辑、保存、新增、删除或重命名。                      | FR-RUNTIME-001                 |
+| FR-HISTORY-001     | 保存明确提交的 Codex Prompt 与 Shell 输入；验收：按 Project/Terminal/Thread 隔离、可查询/清理且不记录 Terminal 输出。                                             | P1 / 7        | 本地保存；秘密 marker/超限输入拒绝；诊断默认排除。                     | FR-TERMINAL-001                |
+| FR-ASSET-001       | Skills、MCP、Plugins 与统一 Asset 治理。                                                                                                                          | Deferred      | 需要新的来源、安装、执行与权限安全模型。                               | ADR-0013                       |
 | FR-DIAGNOSTICS-001 | 提供 `muxlane doctor`、`status`、`daemon start/stop`、`project list`、`account list`、`recover`、`diagnostics export`；验收：无需 GUI，导出包先脱敏。             | P0 / 4、5     | 默认不上传；崩溃日志上传须主动授权。                                   | FR-RECOVERY-001                |
 
 明确不做的需求包括自动轮换、额度规避、团队共享、云同步凭证和高级 Pane；不得以 P2 名义绕过非目标。
@@ -93,7 +94,7 @@ Project-scoped `CODEX_HOME` 位于 `~/.local/share/muxlane/projects/<project-id>
 
 ## 9. 平台与阶段映射
 
-MVP 的 Supported Target 是 Windows 10/11、WSL2、默认 Ubuntu WSL 发行版和 Windows x64；这不是阶段 1 已验证声明。阶段 2 验证 Project Runtime、凭证刷新与 Account 接管；阶段 3 验证 Terminal、Windows—WSL Bridge、重连与背压；阶段 4 验证锁、Launch Transaction、故障注入与冲突 Recovery；阶段 5 建立正式后台、SQLite、控制协议和 CLI；阶段 6 建立 GUI 与 Usage；阶段 7 建立工作台与 Asset；阶段 8 做发布、安全、性能和运维。
+MVP 的 Supported Target 是 Windows 10/11、WSL2、默认 Ubuntu WSL 发行版和 Windows x64。阶段 2 验证 Project Runtime、凭证刷新与 Account 接管；阶段 3 验证 Terminal、Windows—WSL Bridge、重连与背压；阶段 4 验证锁、Launch Transaction、故障注入与冲突 Recovery；阶段 5 建立正式后台、SQLite、控制协议和 CLI；阶段 6 建立 Windows GUI、Usage、正式 Terminal 与托盘；阶段 7 建立安全本地工作台；阶段 8 做发布、安全、性能和运维。
 
 ## 10. 风险、假设与开放问题
 
