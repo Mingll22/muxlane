@@ -12,10 +12,14 @@ use std::{
 };
 
 use clap as _;
+use muxlane_core as _;
 use muxlane_protocol::{
     AttachedTerminal, ManagedWindow, Phase3Event, Phase3Frame, Phase3Request,
     Phase3RequestEnvelope, Phase3Response, ResultFrame,
 };
+use nix as _;
+use tempfile as _;
+use uuid as _;
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 const EVENT_TIMEOUT: Duration = Duration::from_secs(5);

@@ -1,11 +1,187 @@
-//! Future protocol boundary for Muxlane components.
+//! Versioned, local-only control protocol for Muxlane components.
 //!
-//! The only wire types defined here are explicitly scoped to the non-production
-//! Phase 3 terminal POC. They are not a stable Runtime or RPC protocol.
+//! The formal v1 boundary is intentionally separate from the retained Phase 3
+//! POC frame types at the end of this file. New product clients use only the v1
+//! JSON-RPC envelopes and capability-negotiated request types.
 
 #![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use muxlane_core::{
+    diagnostics::DiagnosticReceipt,
+    model::{
+        Account, CapabilityProbe, LaunchView, Project, RecoveryResult, Terminal, UsageSnapshot,
+    },
+};
+
+pub const PROTOCOL_MAJOR: u16 = 1;
+pub const PROTOCOL_MINOR: u16 = 0;
+pub const MAX_CONTROL_MESSAGE_BYTES: usize = 128 * 1024;
+
+pub const CAPABILITIES: &[&str] = &[
+    "core.read.v1",
+    "account.read.v1",
+    "account.import.v1",
+    "project.read.v1",
+    "project.register.v1",
+    "launch.start.v1",
+    "launch.read.v1",
+    "recovery.scan.v1",
+    "terminal.read.v1",
+    "terminal.create.v1",
+    "terminal.history.v1",
+    "usage.probe.v1",
+    "usage.read.v1",
+    "usage.refresh.v1",
+    "diagnostics.export.v1",
+];
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct RpcRequest {
+    pub jsonrpc: String,
+    pub id: String,
+    #[serde(flatten)]
+    pub request: ControlRequest,
+}
+
+impl RpcRequest {
+    pub fn new(id: impl Into<String>, request: ControlRequest) -> Self {
+        Self { jsonrpc: "2.0".to_owned(), id: id.into(), request }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct RpcResponse {
+    pub jsonrpc: String,
+    pub id: String,
+    #[serde(flatten)]
+    pub body: RpcResponseBody,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(untagged)]
+pub enum RpcResponseBody {
+    Result { result: ControlResponse },
+    Error { error: RpcError },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct RpcError {
+    pub code: i32,
+    pub message: String,
+    pub data: RpcErrorData,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct RpcErrorData {
+    pub error_code: String,
+    pub retryable: bool,
+    pub user_action_required: bool,
+    pub correlation_id: String,
+    pub safe_details: Value,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(tag = "method", content = "params")]
+pub enum ControlRequest {
+    #[serde(rename = "system.handshake")]
+    SystemHandshake(HandshakeRequest),
+    #[serde(rename = "system.health")]
+    SystemHealth,
+    #[serde(rename = "system.status")]
+    SystemStatus,
+    #[serde(rename = "system.shutdown")]
+    SystemShutdown { operation_id: String },
+    #[serde(rename = "account.list")]
+    AccountList,
+    #[serde(rename = "account.import")]
+    AccountImport { source_path: String, display_name: String, operation_id: String },
+    #[serde(rename = "project.list")]
+    ProjectList,
+    #[serde(rename = "project.register")]
+    ProjectRegister { source_path: String, name: String, operation_id: String },
+    #[serde(rename = "launch.start")]
+    LaunchStart { account_id: String, project_id: String, operation_id: String },
+    #[serde(rename = "launch.list")]
+    LaunchList,
+    #[serde(rename = "recovery.scan")]
+    RecoveryScan { operation_id: String },
+    #[serde(rename = "terminal.list")]
+    TerminalList { project_id: String },
+    #[serde(rename = "terminal.create")]
+    TerminalCreate { project_id: String, name: String, operation_id: String },
+    #[serde(rename = "terminal.history")]
+    TerminalHistory { terminal_id: String },
+    #[serde(rename = "usage.probe")]
+    UsageProbe { account_id: String },
+    #[serde(rename = "usage.read")]
+    UsageRead { account_id: String },
+    #[serde(rename = "usage.refresh")]
+    UsageRefresh { account_id: String, operation_id: String },
+    #[serde(rename = "diagnostics.export")]
+    DiagnosticsExport { operation_id: String },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct HandshakeRequest {
+    pub protocol_major: u16,
+    pub protocol_minor: u16,
+    pub client_name: String,
+    pub client_version: String,
+    pub requested_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(tag = "kind", content = "data", rename_all = "snake_case")]
+pub enum ControlResponse {
+    Handshake(HandshakeResponse),
+    Health(HealthResponse),
+    Status(StatusResponse),
+    Accounts(Vec<Account>),
+    Account(Account),
+    Projects(Vec<Project>),
+    Project(Project),
+    Launch(LaunchView),
+    Launches(Vec<LaunchView>),
+    Recovery(Vec<RecoveryResult>),
+    Terminals(Vec<Terminal>),
+    Terminal(Terminal),
+    TerminalHistory { terminal_id: String, bytes: Vec<u8>, truncated: bool },
+    UsageProbe(CapabilityProbe),
+    Usage(Option<UsageSnapshot>),
+    Diagnostics(DiagnosticReceipt),
+    Acknowledged,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct HandshakeResponse {
+    pub protocol_major: u16,
+    pub protocol_minor: u16,
+    pub daemon_version: String,
+    pub daemon_instance_id: String,
+    pub granted_capabilities: Vec<String>,
+    pub max_control_message_bytes: usize,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct HealthResponse {
+    pub healthy: bool,
+    pub database_integrity: String,
+    pub schema_version: u32,
+    pub daemon_instance_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct StatusResponse {
+    pub daemon_instance_id: String,
+    pub accounts: u64,
+    pub projects: u64,
+    pub launches: u64,
+    pub recovery_incidents: u64,
+    pub active_launches: u64,
+}
 
 /// Stable package identifier for build and integration checks.
 pub const CRATE_IDENTIFIER: &str = "muxlane-protocol";
