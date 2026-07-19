@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OperationClaim {
@@ -240,6 +240,39 @@ impl Storage {
                 CREATE INDEX recovery_runs_transaction_time
                     ON recovery_runs(transaction_id, started_at DESC);
                 PRAGMA user_version = 3;
+                "#,
+            )?;
+            transaction.commit()?;
+        }
+        let current: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if current < 4 {
+            let transaction = connection.transaction()?;
+            transaction.execute_batch(
+                r#"
+                ALTER TABLE terminals RENAME TO terminals_v3;
+                CREATE TABLE terminals (
+                    terminal_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(project_id),
+                    kind TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    tmux_window_identity TEXT NOT NULL,
+                    lifecycle_status TEXT NOT NULL,
+                    ordinal INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    closed_at INTEGER
+                );
+                INSERT INTO terminals(
+                    terminal_id,project_id,kind,display_name,tmux_window_identity,
+                    lifecycle_status,ordinal,created_at,closed_at
+                ) SELECT
+                    terminal_id,project_id,kind,display_name,tmux_window_identity,
+                    lifecycle_status,ordinal,created_at,closed_at
+                FROM terminals_v3;
+                DROP TABLE terminals_v3;
+                CREATE UNIQUE INDEX active_terminal_window_identity
+                    ON terminals(project_id,tmux_window_identity)
+                    WHERE lifecycle_status != 'closed';
+                PRAGMA user_version = 4;
                 "#,
             )?;
             transaction.commit()?;
@@ -739,6 +772,15 @@ impl Storage {
             params![timestamp, terminal_id],
         )?;
         self.terminal(terminal_id)
+    }
+
+    pub fn close_project_terminals(&self, project_id: &str) -> CoreResult<()> {
+        let timestamp = now();
+        self.connect()?.execute(
+            "UPDATE terminals SET lifecycle_status='closed',closed_at=COALESCE(closed_at,?) WHERE project_id=? AND lifecycle_status!='closed'",
+            params![timestamp, project_id],
+        )?;
+        Ok(())
     }
 
     pub fn replace_thread_indexes(

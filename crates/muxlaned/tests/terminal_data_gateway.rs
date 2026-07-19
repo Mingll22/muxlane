@@ -97,7 +97,7 @@ fn fixture(label: &str) -> (TempDir, Storage, Terminal) {
 fn add_terminal(storage: &Storage, root: &std::path::Path, label: &str) -> Terminal {
     let source = root.join(label);
     fs::create_dir(&source).unwrap();
-    let project = register_project(&storage, &source, label).unwrap();
+    let project = register_project(storage, &source, label).unwrap();
     let output = Command::new("tmux")
         .args([
             "-L",

@@ -26,6 +26,10 @@ pub fn start_managed_runner(
     let exists = tmux_status(["has-session", "-t", &project.tmux_session_name]).is_ok();
     if exists {
         verify_session_identity(&project.tmux_session_name, &project.project_id)?;
+    } else {
+        // tmux window IDs are scoped to one tmux server lifetime and can be
+        // reused after WSL/daemon restart. SQLite retains history, not liveness.
+        storage.close_project_terminals(&project.project_id)?;
     }
     let root_env = format!("MUXLANE_DATA_DIR={}", storage.layout().root().display());
     let executable = daemon_executable.to_str().ok_or_else(|| {

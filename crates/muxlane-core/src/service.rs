@@ -177,6 +177,17 @@ pub fn run_managed_launch(storage: &Storage, transaction_id: &str) -> CoreResult
     let (runner_identity, codex_identity) = match identities {
         Ok(identities) => identities,
         Err(error) => {
+            if let Ok(Some(status)) = child.try_wait() {
+                let disposition = credential::commit_and_clean(storage, transaction_id)?;
+                if disposition != credential::CredentialDisposition::Conflict {
+                    storage.transition(transaction_id, TransactionState::Finished)?;
+                    storage.finish_launch(
+                        transaction_id,
+                        if status.success() { "exited" } else { "exited_error" },
+                    )?;
+                }
+                return Ok(status.code().unwrap_or(128));
+            }
             let _ = child.kill();
             let _ = child.wait();
             let cleanup = credential::commit_and_clean(storage, transaction_id);
