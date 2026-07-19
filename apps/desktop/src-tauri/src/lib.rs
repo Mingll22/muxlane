@@ -11,7 +11,7 @@ mod runtime;
 
 use tauri::Manager;
 
-/// Starts the desktop shell with Phase 3's finite terminal POC command surface.
+/// Starts the desktop shell with the formal control and Terminal data planes.
 pub fn run() -> tauri::Result<()> {
     tauri::Builder::default()
         .manage(phase3::Phase3State::new())
