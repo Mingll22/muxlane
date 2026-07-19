@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { TerminalPoc } from './TerminalPoc';
 import {
   phase3Bridge,
+  type AttachedTerminal,
   type ManagedSession,
   type ManagedWindow,
   type TerminalEvent,
 } from '../terminal/phase3Bridge';
+import { sameStream } from '../terminal/streamLifecycle';
 
 const syntheticProjects = ['project-a', 'project-b'];
 
@@ -17,7 +19,8 @@ export function AppShell() {
   const [status, setStatus] = useState('未连接');
   const [error, setError] = useState<string | null>(null);
   const [lastFrame, setLastFrame] = useState('等待终端数据');
-  const [attachedWindow, setAttachedWindow] = useState<string | null>(null);
+  const [activeStream, setActiveStream] = useState<AttachedTerminal | null>(null);
+  const transitionIdRef = useRef(0);
 
   const refresh = useCallback(
     async (nextProject = projectId) => {
@@ -27,18 +30,45 @@ export function AppShell() {
       ]);
       setSessions(nextSessions);
       setWindows(nextWindows);
+      return nextWindows;
     },
     [projectId],
   );
 
   useEffect(() => {
-    void phase3Bridge
-      .probe()
-      .then((version) => setStatus(`Gateway 可用 / ${version}`))
+    let cancelled = false;
+    const initialTransition = transitionIdRef.current;
+    void Promise.all([
+      phase3Bridge.probe(),
+      phase3Bridge.listSessions(),
+      phase3Bridge.listWindows('project-a').catch(() => []),
+    ])
+      .then(async ([version, nextSessions, nextWindows]) => {
+        if (cancelled) {
+          return;
+        }
+        setStatus(`Gateway 可用 / ${version}`);
+        setSessions(nextSessions);
+        setWindows(nextWindows);
+        const active = nextWindows.find((window) => window.active) ?? nextWindows[0];
+        if (active !== undefined && transitionIdRef.current === initialTransition) {
+          const recovered = await phase3Bridge.attach('project-a', active.id);
+          if (!cancelled && transitionIdRef.current === initialTransition) {
+            setActiveStream(recovered);
+            setStatus(`已恢复 project-a / ${active.id}`);
+          }
+        }
+      })
       .catch((reason: unknown) => {
+        if (cancelled) {
+          return;
+        }
         setStatus('Gateway 未连接');
         setError(`无法探测 WSL Terminal Gateway：${String(reason)}`);
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const createSession = async () => {
@@ -53,13 +83,20 @@ export function AppShell() {
   };
 
   const attach = async (windowId: string) => {
+    const transitionId = transitionIdRef.current + 1;
+    transitionIdRef.current = transitionId;
     setError(null);
+    setActiveStream(null);
     try {
-      await phase3Bridge.attach(projectId, windowId);
-      setAttachedWindow(windowId);
-      setStatus(`已附加 ${projectId} / ${windowId}`);
+      const stream = await phase3Bridge.attach(projectId, windowId);
+      if (transitionIdRef.current === transitionId) {
+        setActiveStream(stream);
+        setStatus(`已附加 ${projectId} / ${windowId}`);
+      }
     } catch (reason) {
-      setError(`附加终端失败：${String(reason)}`);
+      if (transitionIdRef.current === transitionId) {
+        setError(`附加终端失败：${String(reason)}`);
+      }
     }
   };
 
@@ -70,8 +107,6 @@ export function AppShell() {
       return;
     }
     try {
-      await phase3Bridge.detach();
-      setAttachedWindow(null);
       await attach(active.id);
     } catch (reason) {
       setError(`重新连接失败：${String(reason)}`);
@@ -79,10 +114,15 @@ export function AppShell() {
   };
 
   const selectProject = async (nextProject: string) => {
+    transitionIdRef.current += 1;
+    const previous = activeStream;
+    setActiveStream(null);
     setProjectId(nextProject);
-    setAttachedWindow(null);
     setError(null);
     try {
+      if (previous !== null) {
+        await phase3Bridge.detach(previous).catch(() => undefined);
+      }
       await refresh(nextProject);
     } catch (reason) {
       setError(`读取 ${nextProject} Session 失败：${String(reason)}`);
@@ -111,14 +151,26 @@ export function AppShell() {
   const closeWindow = async (windowId: string) => {
     try {
       await phase3Bridge.closeWindow(projectId, windowId);
-      if (attachedWindow === windowId) {
-        setAttachedWindow(null);
+      if (
+        activeStream?.project_id === projectId &&
+        activeStream.window_id === windowId
+      ) {
+        setActiveStream(null);
       }
       await refresh(projectId);
     } catch (reason) {
       setError(`关闭 Window 失败：${String(reason)}`);
     }
   };
+
+  const onStreamInvalidated = useCallback((invalidated: AttachedTerminal) => {
+    setActiveStream((current) =>
+      current !== null && sameStream(current, invalidated) ? null : current,
+    );
+  }, []);
+
+  const attachedWindow =
+    activeStream?.project_id === projectId ? activeStream.window_id : null;
 
   return (
     <main className="terminal-workbench" aria-labelledby="app-title">
@@ -193,9 +245,10 @@ export function AppShell() {
           <p className="frame-state">{lastFrame}</p>
         </div>
         <TerminalPoc
-          attached={attachedWindow !== null}
+          stream={activeStream}
           onError={onTerminalError}
           onFrame={onFrame}
+          onStreamInvalidated={onStreamInvalidated}
         />
         {error === null ? null : (
           <p className="terminal-error" role="alert">

@@ -18,6 +18,7 @@ pub fn run() -> tauri::Result<()> {
             phase3::phase3_list_windows,
             phase3::phase3_create_window,
             phase3::phase3_attach,
+            phase3::phase3_start_stream,
             phase3::phase3_detach,
             phase3::phase3_send_input,
             phase3::phase3_resize,

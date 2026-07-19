@@ -13,11 +13,21 @@ export type ManagedWindow = {
   active: boolean;
 };
 
+export type AttachedTerminal = {
+  connection_id: string;
+  attachment_id: number;
+  bootstrap_id: number;
+  project_id: string;
+  window_id: string;
+  pane_id: string;
+};
+
 export type TerminalEvent =
-  | { kind: 'history'; bytes: number[] }
-  | { kind: 'output'; bytes: number[] }
-  | { kind: 'stream_closed' }
-  | { kind: 'stream_error'; code: string };
+  | { kind: 'history'; stream: AttachedTerminal; sequence: number; bytes: number[] }
+  | { kind: 'output'; stream: AttachedTerminal; sequence: number; bytes: number[] }
+  | { kind: 'stream_closed'; stream: AttachedTerminal; sequence: number }
+  | { kind: 'stream_error'; stream: AttachedTerminal; sequence: number; code: string }
+  | { kind: 'connection_closed'; connection_id: string };
 
 export const terminalEventName = 'phase3-terminal-frame';
 
@@ -30,10 +40,13 @@ export const phase3Bridge = {
   createWindow: (projectId: string, name: string) =>
     invoke<void>('phase3_create_window', { projectId, name }),
   attach: (projectId: string, windowId: string) =>
-    invoke<void>('phase3_attach', { projectId, windowId }),
-  detach: () => invoke<void>('phase3_detach'),
-  sendInput: (bytes: Uint8Array) => invoke<void>('phase3_send_input', { bytes: [...bytes] }),
-  resize: (columns: number, rows: number) => invoke<void>('phase3_resize', { columns, rows }),
+    invoke<AttachedTerminal>('phase3_attach', { projectId, windowId }),
+  startStream: (stream: AttachedTerminal) => invoke<void>('phase3_start_stream', { stream }),
+  detach: (stream: AttachedTerminal) => invoke<void>('phase3_detach', { stream }),
+  sendInput: (stream: AttachedTerminal, bytes: Uint8Array) =>
+    invoke<void>('phase3_send_input', { stream, bytes: [...bytes] }),
+  resize: (stream: AttachedTerminal, columns: number, rows: number) =>
+    invoke<void>('phase3_resize', { stream, columns, rows }),
   closeWindow: (projectId: string, windowId: string) =>
     invoke<void>('phase3_close_window', { projectId, windowId }),
   cleanupSession: (projectId: string) => invoke<void>('phase3_cleanup_session', { projectId }),

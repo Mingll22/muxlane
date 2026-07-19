@@ -35,7 +35,10 @@ enum Phase3Command {
         socket: String,
     },
     /// A deterministic terminal program used only by Phase 3 tmux tests.
-    SyntheticRunner,
+    SyntheticRunner {
+        #[arg(long, default_value = "synthetic")]
+        label: String,
+    },
 }
 
 fn main() {
@@ -45,8 +48,8 @@ fn main() {
             phase3::run_gateway(socket)
                 .map_err(|error| format!("{}: {}", error.code, error.message))
         }
-        Some(Command::Phase3 { command: Phase3Command::SyntheticRunner }) => {
-            phase3::run_synthetic_runner().map_err(|error| error.to_string())
+        Some(Command::Phase3 { command: Phase3Command::SyntheticRunner { label } }) => {
+            phase3::run_synthetic_runner(label).map_err(|error| error.to_string())
         }
         None => Ok(()),
     };

@@ -20,9 +20,10 @@ pub enum Phase3Request {
     CreateWindow { project_id: String, name: String },
     ListWindows { project_id: String },
     Attach { project_id: String, window_id: String },
-    Detach,
-    SendInput { bytes: Vec<u8> },
-    Resize { columns: u16, rows: u16 },
+    StartStream { stream: AttachedTerminal },
+    Detach { stream: AttachedTerminal },
+    SendInput { stream: AttachedTerminal, bytes: Vec<u8> },
+    Resize { stream: AttachedTerminal, columns: u16, rows: u16 },
     CloseWindow { project_id: String, window_id: String },
     CleanupSession { project_id: String },
     ReadState,
@@ -55,10 +56,11 @@ pub struct ManagedWindow {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Phase3Response {
-    Probe { tmux_version: String },
+    Probe { connection_id: String, tmux_version: String },
     Sessions { sessions: Vec<ManagedSession> },
     Windows { windows: Vec<ManagedWindow> },
-    Attached { project_id: String, window_id: String },
+    Attached { stream: AttachedTerminal },
+    StreamStarted { stream: AttachedTerminal },
     Detached,
     State { attached: Option<AttachedTerminal> },
     Acknowledged,
@@ -67,8 +69,12 @@ pub enum Phase3Response {
 /// The current data-plane attachment, if any.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct AttachedTerminal {
+    pub connection_id: String,
+    pub attachment_id: u64,
+    pub bootstrap_id: u64,
     pub project_id: String,
     pub window_id: String,
+    pub pane_id: String,
 }
 
 /// Structured failures intentionally omit child-process stderr and terminal content.
@@ -82,10 +88,11 @@ pub struct Phase3Error {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Phase3Event {
-    History { bytes: Vec<u8> },
-    Output { bytes: Vec<u8> },
-    StreamClosed,
-    StreamError { code: String },
+    History { stream: AttachedTerminal, sequence: u64, bytes: Vec<u8> },
+    Output { stream: AttachedTerminal, sequence: u64, bytes: Vec<u8> },
+    StreamClosed { stream: AttachedTerminal, sequence: u64 },
+    StreamError { stream: AttachedTerminal, sequence: u64, code: String },
+    ConnectionClosed { connection_id: String },
 }
 
 /// Every stdout frame is a typed response or terminal event, never a free-form command.
@@ -115,9 +122,17 @@ mod tests {
 
     #[test]
     fn phase3_poc_frames_are_typed_and_round_trip() {
+        let stream = super::AttachedTerminal {
+            connection_id: "connection-7".to_owned(),
+            attachment_id: 3,
+            bootstrap_id: 4,
+            project_id: "project-a".to_owned(),
+            window_id: "@1".to_owned(),
+            pane_id: "%1".to_owned(),
+        };
         let request = Phase3RequestEnvelope {
             id: 7,
-            request: Phase3Request::Resize { columns: 120, rows: 40 },
+            request: Phase3Request::Resize { stream: stream.clone(), columns: 120, rows: 40 },
         };
         let encoded = serde_json::to_string(&request).expect("serializes test request");
         let decoded: Phase3RequestEnvelope =
@@ -127,8 +142,10 @@ mod tests {
         let malformed = r#"{\"id\":1,\"request\":{\"kind\":\"execute\",\"command\":\"id\"}}"#;
         assert!(serde_json::from_str::<Phase3RequestEnvelope>(malformed).is_err());
         assert!(
-            serde_json::to_string(&Phase3Frame::Event { event: super::Phase3Event::StreamClosed })
-                .is_ok()
+            serde_json::to_string(&Phase3Frame::Event {
+                event: super::Phase3Event::StreamClosed { stream, sequence: 9 },
+            })
+            .is_ok()
         );
     }
 }

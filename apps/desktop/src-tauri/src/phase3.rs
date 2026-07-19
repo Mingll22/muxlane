@@ -10,14 +10,14 @@ use std::{
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{self, Sender},
     },
     time::Duration,
 };
 
 use muxlane_protocol::{
-    ManagedSession, ManagedWindow, Phase3Error, Phase3Event, Phase3Frame, Phase3Request,
+    AttachedTerminal, ManagedSession, ManagedWindow, Phase3Error, Phase3Frame, Phase3Request,
     Phase3RequestEnvelope, Phase3Response, ResultFrame,
 };
 use tauri::{AppHandle, Emitter, State};
@@ -34,6 +34,7 @@ pub struct Phase3Bridge {
     child: Mutex<Child>,
     next_id: AtomicU64,
     pending: Pending,
+    alive: Arc<AtomicBool>,
 }
 
 impl Phase3Bridge {
@@ -50,12 +51,14 @@ impl Phase3Bridge {
         let stdout =
             child.stdout.take().ok_or_else(|| bridge_error("WSL gateway stdout unavailable"))?;
         let pending = Arc::new(Mutex::new(HashMap::new()));
-        forward_frames(app, stdout, Arc::clone(&pending));
+        let alive = Arc::new(AtomicBool::new(true));
+        forward_frames(app, stdout, Arc::clone(&pending), Arc::clone(&alive));
         Ok(Self {
             stdin: Mutex::new(stdin),
             child: Mutex::new(child),
             next_id: AtomicU64::new(1),
             pending,
+            alive,
         })
     }
 
@@ -120,6 +123,9 @@ impl Phase3State {
     fn request(&self, app: AppHandle, request: Phase3Request) -> Result<Phase3Response, String> {
         let mut bridge =
             self.bridge.lock().map_err(|_| "Phase 3 bridge state unavailable".to_owned())?;
+        if bridge.as_ref().is_some_and(|bridge| !bridge.alive.load(Ordering::Acquire)) {
+            *bridge = None;
+        }
         if bridge.is_none() {
             *bridge = Some(Phase3Bridge::start(app).map_err(display_error)?);
         }
@@ -131,7 +137,12 @@ impl Phase3State {
     }
 }
 
-fn forward_frames(app: AppHandle, stdout: impl std::io::Read + Send + 'static, pending: Pending) {
+fn forward_frames(
+    app: AppHandle,
+    stdout: impl std::io::Read + Send + 'static,
+    pending: Pending,
+    alive: Arc<AtomicBool>,
+) {
     std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             let Ok(frame) = serde_json::from_str::<Phase3Frame>(&line) else {
@@ -154,17 +165,19 @@ fn forward_frames(app: AppHandle, stdout: impl std::io::Read + Send + 'static, p
                 }
             }
         }
-        let _ = app.emit(
-            EVENT_NAME,
-            Phase3Event::StreamError { code: "wsl_gateway_disconnected".to_owned() },
-        );
+        alive.store(false, Ordering::Release);
+        if let Ok(mut pending) = pending.lock() {
+            for (_, sender) in pending.drain() {
+                let _ = sender.send(Err(bridge_error("WSL terminal gateway disconnected")));
+            }
+        }
     });
 }
 
 #[tauri::command]
 pub fn phase3_probe(app: AppHandle, state: State<'_, Phase3State>) -> Result<String, String> {
     match state.request(app, Phase3Request::Probe)? {
-        Phase3Response::Probe { tmux_version } => Ok(tmux_version),
+        Phase3Response::Probe { tmux_version, .. } => Ok(tmux_version),
         _ => Err("Phase 3 bridge returned an unexpected probe response".to_owned()),
     }
 }
@@ -217,16 +230,32 @@ pub fn phase3_attach(
     state: State<'_, Phase3State>,
     project_id: String,
     window_id: String,
-) -> Result<(), String> {
+) -> Result<AttachedTerminal, String> {
     match state.request(app, Phase3Request::Attach { project_id, window_id })? {
-        Phase3Response::Attached { .. } => Ok(()),
+        Phase3Response::Attached { stream } => Ok(stream),
         _ => Err("Phase 3 bridge returned an unexpected attach response".to_owned()),
     }
 }
 
 #[tauri::command]
-pub fn phase3_detach(app: AppHandle, state: State<'_, Phase3State>) -> Result<(), String> {
-    match state.request(app, Phase3Request::Detach)? {
+pub fn phase3_start_stream(
+    app: AppHandle,
+    state: State<'_, Phase3State>,
+    stream: AttachedTerminal,
+) -> Result<(), String> {
+    match state.request(app, Phase3Request::StartStream { stream })? {
+        Phase3Response::StreamStarted { .. } => Ok(()),
+        _ => Err("Phase 3 bridge returned an unexpected stream-start response".to_owned()),
+    }
+}
+
+#[tauri::command]
+pub fn phase3_detach(
+    app: AppHandle,
+    state: State<'_, Phase3State>,
+    stream: AttachedTerminal,
+) -> Result<(), String> {
+    match state.request(app, Phase3Request::Detach { stream })? {
         Phase3Response::Detached => Ok(()),
         _ => Err("Phase 3 bridge returned an unexpected detach response".to_owned()),
     }
@@ -236,19 +265,21 @@ pub fn phase3_detach(app: AppHandle, state: State<'_, Phase3State>) -> Result<()
 pub fn phase3_send_input(
     app: AppHandle,
     state: State<'_, Phase3State>,
+    stream: AttachedTerminal,
     bytes: Vec<u8>,
 ) -> Result<(), String> {
-    acknowledged(state.request(app, Phase3Request::SendInput { bytes })?)
+    acknowledged(state.request(app, Phase3Request::SendInput { stream, bytes })?)
 }
 
 #[tauri::command]
 pub fn phase3_resize(
     app: AppHandle,
     state: State<'_, Phase3State>,
+    stream: AttachedTerminal,
     columns: u16,
     rows: u16,
 ) -> Result<(), String> {
-    acknowledged(state.request(app, Phase3Request::Resize { columns, rows })?)
+    acknowledged(state.request(app, Phase3Request::Resize { stream, columns, rows })?)
 }
 
 #[tauri::command]
