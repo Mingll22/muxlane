@@ -25,10 +25,7 @@ export function beginStream(stream: AttachedTerminal): StreamCursor {
   return { stream, nextSequence: 0 };
 }
 
-export function classifyStreamEvent(
-  cursor: StreamCursor,
-  event: TerminalEvent,
-): StreamDecision {
+export function classifyStreamEvent(cursor: StreamCursor, event: TerminalEvent): StreamDecision {
   if (event.kind === 'connection_closed') {
     return event.connection_id === cursor.stream.connection_id
       ? { kind: 'gap', expected: cursor.nextSequence, received: cursor.nextSequence }
@@ -37,7 +34,10 @@ export function classifyStreamEvent(
   if (!sameStream(cursor.stream, event.stream)) {
     return { kind: 'stale' };
   }
-  if (event.sequence !== cursor.nextSequence || (cursor.nextSequence === 0 && event.kind !== 'history')) {
+  if (
+    event.sequence !== cursor.nextSequence ||
+    (cursor.nextSequence === 0 && event.kind !== 'history')
+  ) {
     return { kind: 'gap', expected: cursor.nextSequence, received: event.sequence };
   }
   return {

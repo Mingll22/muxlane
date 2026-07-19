@@ -151,10 +151,7 @@ export function AppShell() {
   const closeWindow = async (windowId: string) => {
     try {
       await phase3Bridge.closeWindow(projectId, windowId);
-      if (
-        activeStream?.project_id === projectId &&
-        activeStream.window_id === windowId
-      ) {
+      if (activeStream?.project_id === projectId && activeStream.window_id === windowId) {
         setActiveStream(null);
       }
       await refresh(projectId);
@@ -169,8 +166,7 @@ export function AppShell() {
     );
   }, []);
 
-  const attachedWindow =
-    activeStream?.project_id === projectId ? activeStream.window_id : null;
+  const attachedWindow = activeStream?.project_id === projectId ? activeStream.window_id : null;
 
   return (
     <main className="terminal-workbench" aria-labelledby="app-title">

@@ -44,20 +44,26 @@ describe('terminal stream lifecycle', () => {
       }).kind,
     ).toBe('stale');
     expect(
-      classifyStreamEvent({ stream, nextSequence: 2 }, {
-        kind: 'output',
-        stream,
-        sequence: 1,
-        bytes: [],
-      }).kind,
+      classifyStreamEvent(
+        { stream, nextSequence: 2 },
+        {
+          kind: 'output',
+          stream,
+          sequence: 1,
+          bytes: [],
+        },
+      ).kind,
     ).toBe('gap');
     expect(
-      classifyStreamEvent({ stream, nextSequence: 2 }, {
-        kind: 'output',
-        stream,
-        sequence: 3,
-        bytes: [],
-      }).kind,
+      classifyStreamEvent(
+        { stream, nextSequence: 2 },
+        {
+          kind: 'output',
+          stream,
+          sequence: 3,
+          bytes: [],
+        },
+      ).kind,
     ).toBe('gap');
     expect(
       classifyStreamEvent(beginStream(stream), {

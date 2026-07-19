@@ -3,11 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useEffect, useRef } from 'react';
 
-import {
-  phase3Bridge,
-  type AttachedTerminal,
-  type TerminalEvent,
-} from '../terminal/phase3Bridge';
+import { phase3Bridge, type AttachedTerminal, type TerminalEvent } from '../terminal/phase3Bridge';
 import {
   beginStream,
   classifyStreamEvent,
