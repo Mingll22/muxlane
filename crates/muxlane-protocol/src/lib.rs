@@ -9,12 +9,21 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[cfg(target_os = "linux")]
 use muxlane_core::{
     diagnostics::DiagnosticReceipt,
     model::{
         Account, CapabilityProbe, LaunchView, Project, RecoveryIncident, RecoveryResult, Terminal,
         ThreadIndex, UsageRefreshResult, UsageSnapshot,
     },
+};
+
+#[cfg(not(target_os = "linux"))]
+mod wire_model;
+#[cfg(not(target_os = "linux"))]
+use wire_model::{
+    Account, CapabilityProbe, DiagnosticReceipt, LaunchView, Project, RecoveryIncident,
+    RecoveryResult, Terminal, ThreadIndex, UsageRefreshResult, UsageSnapshot,
 };
 
 pub const PROTOCOL_MAJOR: u16 = 1;

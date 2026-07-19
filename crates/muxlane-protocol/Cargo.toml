@@ -9,9 +9,11 @@ repository.workspace = true
 description = "Versioned local control protocol for Muxlane"
 
 [dependencies]
-muxlane-core = { path = "../muxlane-core" }
 serde.workspace = true
 serde_json.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+muxlane-core = { path = "../muxlane-core" }
 
 [dev-dependencies]
 serde_json.workspace = true
