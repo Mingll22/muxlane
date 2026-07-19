@@ -21,4 +21,10 @@ poc/phase-4-recovery/fault-injection.sh
 
 Hash 冲突矩阵、损坏 JSON、checkout/commit 中断、终态不可变、重复 Recovery、stale PID/PID reuse/boot mismatch 由 `crates/muxlane-core/tests/recovery_matrix.rs` 与单元测试覆盖。
 
-当前 POC 不能宣告完成：真实 `wsl --terminate` 会终止承载当前 Codex Session 的发行版，尚未在独立测试发行版执行；正式 Terminal data plane 也尚未从 Phase 3 compatibility surface 迁移。
+额外的 destructive harness：
+
+- `wsl-isolated-stage.sh` 仅接受 `/var/tmp/muxlane-e2e/terminate-*`，供专用 WSL 发行版和隔离 systemd-nspawn root 执行真实 terminate、boot identity 与 Recovery 二次中断；
+- `windows-wsl-smoke.ps1` 只接受 `Muxlane-E2E-CODX-*` 发行版和隔离数据根，从 Windows host 验证正式 control/Terminal data plane；
+- 两者都只使用 synthetic credential，不读取真实 Account。
+
+2026-07-20 的阶段结果见 [RESULTS.md](RESULTS.md)。

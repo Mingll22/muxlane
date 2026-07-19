@@ -1,37 +1,90 @@
-# Phase 4 Recovery Results
+# Phase 4/5 Recovery and Runtime Results
 
-## 2026-07-19 WSL/Linux isolated run
+## 2026-07-20 conclusion
 
-命令：
+Local Phase 4 conclusion: `PASS`.
 
-```bash
-cargo build -p muxlaned -p muxlane-cli
-poc/phase-4-recovery/fault-injection.sh
+Local Phase 5 conclusion: `PASS`.
+
+The stage is not considered merged until PR review/CI, squash merge, and post-merge `main` CI are green. No real Account credential was read or queried.
+
+## Real destructive recovery evidence
+
+All credentials were synthetic fixtures. The default Ubuntu distribution and `docker-desktop` were not terminated.
+
+### Dedicated WSL distribution
+
+Distribution: `Muxlane-E2E-CODX-R8M4QZ`, installed under a dedicated `E:` test location.
+
+Observed results:
+
+```text
+scenario=checkout_boundary_kill state_before=preparing recovery=checkout_boundary_cleaned state_after=recovered runtime_auth=absent open_incidents=0
+scenario=commit_after_atomic_vault_kill state_before=committing_auth hashes_equal_before=yes recovery=runtime_credential_committed state_after=recovered vault_stable=yes runtime_auth=absent
+scenario=before_terminate boot_id=84d7ecf4-f44f-47c6-b5db-ae890c4a1b17 state=running
+scenario=recovery_journaled running_recovery_runs=1
+scenario=recovery_process_killed
+scenario=post_restart_idempotent_recovery state=recovered repeat_results=0 incomplete_runs=1 completed_runs=1 runtime_auth=absent vault_stable=yes open_incidents=0 new_launch_state=finished socket_mode=600 root_mode=700
 ```
 
-最近一次真实输出：
+`wsl.exe --terminate Muxlane-E2E-CODX-R8M4QZ` was executed while the managed transaction was `running`. The distribution was observed as `Stopped`, then restarted. Recovery was killed after its durable `recovery_runs.status=running` journal entry and restarted a second time. The unfinished audit row remained evidence, a new run completed, repeated Recovery returned zero work, locks were reusable, and a new Launch finished.
+
+WSL2 distributions share the utility VM kernel, so terminating one distribution does not change `/proc/sys/kernel/random/boot_id` while another distribution remains running. This is an observed platform fact, not a simulated pass.
+
+### Isolated real Linux boot identities
+
+An Ubuntu 24.04 systemd-nspawn root was created inside the dedicated test distribution. Two separate container boots exposed distinct Linux boot identities to the real Muxlane processes:
+
+```text
+before: 2043cb04-72fb-4cbc-8238-e6b426cc7721
+after:  549b81b0-df36-4df7-838d-715d096d64fe
+```
+
+The first boot left a real `running` Launch and active Runtime credential. The second boot recovered it to `recovered`, preserved the Vault hash, removed Runtime `auth.json`, produced no incident, returned zero work on repeated Recovery, and completed a new Launch. This validates the `boot_id + PID + start_ticks + executable identity` classification against a real boot-identity transition without shutting down the user's default WSL or Docker.
+
+## Formal Terminal and Windows/WSL evidence
+
+The formal `terminal-gateway` uses the production `muxlane-runtime` tmux socket and a protocol separate from the retained Phase 3 POC frames.
+
+Automated Linux integration verified handshake, attach, one-shot history, live output, input, resize, bounded queues, parallel Projects, detach, reconnect, stale stream rejection, and close. Windows PowerShell then acted as the host client against the dedicated WSL distribution and verified control handshake, attach/start/input/resize/detach, reconnect history, switch, close, daemon/CLI state consistency, and no Windows TCP listener owned by the WSL client process:
 
 ```json
-{"scenario":"daemon_kill_then_codex_kill","status":"PASS"}
-{"scenario":"runner_kill","status":"PASS"}
-{"scenario":"ctrl_c","status":"PASS"}
-{"scenario":"lock_contention_and_parallelism","status":"PASS"}
-{"scenario":"usage_probe_failure_cleanup_and_diagnostics_redaction","status":"PASS"}
-{"status":"PASS","evidence_root":"/tmp/muxlane-phase45.tiw5Ao"}
+{
+  "scenario": "windows_wsl_formal_control_and_terminal",
+  "status": "PASS",
+  "protocol_major": 1,
+  "reconnect_history": "PASS",
+  "tcp_listener": "absent"
+}
 ```
 
-该 evidence root 是本机临时时点证据，不是 Git 产物。检查确认各场景最终无 Project Runtime `auth.json`，根/DB/Socket 目录模式分别为 `0700`/`0600`/`0700`，daemon-kill 与 Ctrl+C 为 `finished`，Runner kill 为 `recovered`，并行场景两条事务均独立结束。
+Windows MSVC/Tauri evidence at the same commit:
 
-Rust 恢复矩阵另覆盖 checkout 边界、Runtime-only 刷新、较新 Vault 保留、双方变化冲突、损坏 JSON、重复 Recovery，以及 Vault 原子替换成功但事务状态尚未推进时的恢复。
+- Desktop `cargo check`: `PASS`;
+- Desktop Clippy with `-D warnings`: `PASS`;
+- Desktop Rust tests: 3 passed;
+- Desktop release build: `PASS`;
+- native `Muxlane.exe` run: process started, obtained a real main-window handle, and exited cleanly with code 0;
+- Windows frontend typecheck/test/build: 5 tests passed and production build completed.
 
-## 未通过或未运行
+## Automated recovery and domain matrix
 
-| 门禁                                      | 状态      | 原因                                                                                         |
-| ----------------------------------------- | --------- | -------------------------------------------------------------------------------------------- |
-| 真实 `wsl --terminate` / boot change      | `NOT RUN` | 当前发行版承载本 Codex Session；不能安全自终止并继续收证。                                   |
-| Recovery 中再次 kill daemon               | `NOT RUN` | 尚未加入独立发行版外部 orchestrator。                                                        |
-| 正式 Terminal live data plane             | `BLOCKED` | create/list/history 已正式化；attach/switch/close 与 Control Mode live stream 仍未正式实现。 |
-| 真实用户 Account Usage success smoke      | `NOT RUN` | 未获授权读取或复制全局真实凭证；仅 schema probe 与 fixture failure path。                    |
-| Windows Desktop / Windows-WSL integration | `NOT RUN` | WSL `verify:desktop` 因缺 `pkg-config`/GTK 系统库而 `BLOCKED`；Windows 原生未运行。          |
+- daemon/Runner/Codex/control-client exits, Ctrl+C, double-lock contention, parallel Projects, stale PID/PID reuse, damaged Runtime JSON, newer Vault, Runtime-only refresh, simultaneous Vault/Runtime changes, post-Vault atomic interruption, repeated Recovery, and terminal transaction immutability: `PASS`;
+- explicit Incident `keep_vault` resolution: idempotent and audited; evidence retained, Launch unblocked without rewriting the terminal transaction;
+- Session/Thread index: Project-local metadata only; prompt/session content is not copied into SQLite;
+- Project archive: refuses active/recovery state, preserves Runtime/files, and blocks subsequent Launch;
+- Usage: fake App Server handshake and semantic mapping, 300-minute and 10080-minute windows, Reset Credit, token usage, isolated Query Home, and global four-query concurrency: `PASS`;
+- real Account Usage success smoke: `NOT RUN` because the user did not authorize access to a real credential.
 
-因此 Phase 4 总体结论仍是 `BLOCKED`，Phase 5 不允许宣告完整或合并。
+## Security and quality
+
+- `pnpm verify`: `PASS`;
+- `pnpm audit --audit-level moderate`: no known vulnerabilities;
+- `cargo audit`: no blocking vulnerability; 17 allowed unmaintained/unsound warnings remain in the existing Tauri/GTK transitive allowlist;
+- diagnostic and repository scans found no real credential, Token, Cookie, Authorization value, private key, prompt body, or Terminal content;
+- controlled root/Socket/Vault/Runtime/recovery evidence modes were checked as `0700`/`0600` as applicable;
+- Linux Desktop build in the default WSL is `BLOCKED` by missing `pkg-config`/GTK development packages; Windows native Desktop validation passed and is the applicable target gate.
+
+## Defects found by real fault injection
+
+Real WSL restart exposed tmux window identity reuse (`@0`) across tmux server lifetimes. SQLite schema v4 now keeps historical Terminal rows while applying uniqueness only to active Terminal records. A second defect allowed a very fast Codex exit to race process identity capture; the Runner now treats an already-observed child exit as a normal lifecycle event and commits/cleans credentials safely.

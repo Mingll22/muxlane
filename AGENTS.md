@@ -2,15 +2,15 @@
 
 ## 定位与阶段
 
-Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。阶段 1 的需求与架构已冻结，阶段 2 Runtime POC 与阶段 3 Terminal POC 已完成验证；Phase 4/5 实现位于独立阶段分支，尚未通过全部真实 WSL/Windows/Terminal/Usage 门禁，不得描述为已关闭或可合并。阶段 2/3 代码仍是明确的非生产 POC；Phase 5 正式后台不能依赖或静默升格 POC frame、Gateway 或 synthetic runner。不得提前进入 Phase 6～8。后续验证若推翻冻结假设，必须通过新的 ADR 修订，不能静默改写已接受决策。
+Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。阶段 1 的需求与架构已冻结，阶段 2/3 POC 已完成；Phase 4 Crash Recovery 与 Phase 5 Core Backend 的正式实现和本地 Windows/WSL 验收已完成，是否合并仍以当前 PR review/CI 为准。阶段 2/3 synthetic Gateway 只保留为隔离兼容测试面，正式产品路径使用 Protocol 1.0 control plane 与独立 Terminal data plane。Phase 4/5 合并和 main CI 关闭前不得进入 Phase 6；不得提前进入 Phase 7～8。
 
 ## 目录职责
 
 - `apps/desktop`：Tauri 2 + React 桌面外壳；首版 UI 使用简体中文。
 - `apps/desktop/src-tauri`：最小原生入口和最小权限配置。
 - `crates/muxlane-core`：正式核心领域、SQLite、Vault、锁、Launch、Recovery、Terminal 与 Usage 边界。
-- `crates/muxlane-protocol`：Protocol 1.0 typed control boundary；Phase 3 frame 仍是兼容 POC，不是正式 Terminal data plane。
-- `crates/muxlaned`：单实例 WSL daemon、受管 Runner 和暂时保留的 Phase 3 compatibility gateway。
+- `crates/muxlane-protocol`：Protocol 1.0 typed control boundary、正式 Terminal data protocol 与隔离的 Phase 3 compatibility frame。
+- `crates/muxlaned`：单实例 WSL daemon、受管 Runner、正式 Terminal Gateway 和隔离的 Phase 3 compatibility gateway。
 - `crates/muxlane-cli`：正式 JSON CLI 与诊断/恢复入口。
 - `docs/adr`：长期架构决策记录。
 - `docs/poc/phase-3-terminal`：Phase 3 Terminal POC 的设计、真实 Windows/WSL 证据与限制。
