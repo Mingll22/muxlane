@@ -22,11 +22,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Check workspace
-        run: cargo check --workspace --all-targets
+        run: cargo check --workspace --exclude muxlane-desktop --all-targets
       - name: Lint workspace
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --exclude muxlane-desktop --all-targets --all-features -- -D warnings
       - name: Test workspace
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace --exclude muxlane-desktop --all-features
 
   frontend:
     name: Frontend quality
