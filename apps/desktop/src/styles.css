@@ -6,13 +6,19 @@
   text-rendering: optimizeLegibility;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   min-width: 720px;
-  min-height: 100vh;
   margin: 0;
 }
 
@@ -32,7 +38,8 @@ button:focus-visible {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   background:
     linear-gradient(90deg, rgb(103 214 203 / 4%) 1px, transparent 1px) 0 0 / 32px 32px,
