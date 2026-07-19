@@ -12,12 +12,13 @@ permissions:
 jobs:
   rust:
     name: Rust quality
-    runs-on: windows-latest
+    # The workspace contains the WSL-only daemon/core crates. Windows validates
+    # the platform-neutral protocol client through the dedicated Desktop job.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Install Rust 1.97.0
-        shell: pwsh
-        run: rustup toolchain install 1.97.0 --profile minimal; rustup default 1.97.0; rustup component add rustfmt clippy
+        run: rustup toolchain install 1.97.0 --profile minimal && rustup default 1.97.0 && rustup component add rustfmt clippy
       - name: Check formatting
         run: cargo fmt --all --check
       - name: Check workspace
