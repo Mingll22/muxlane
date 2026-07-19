@@ -1,7 +1,7 @@
 //! Windows-host bridge for the explicitly non-production Phase 3 terminal POC.
 //!
 //! The WebView never receives a shell or executable argument. The host launches
-//! only `wsl.exe --exec muxlaned phase3 gateway --socket muxlane-p3`, then maps
+//! only `wsl.exe --exec /usr/bin/env muxlaned phase3 gateway --socket muxlane-p3`, then maps
 //! the POC's typed stdio frames to a finite Tauri command/event surface.
 
 use std::{
@@ -23,6 +23,8 @@ use muxlane_protocol::{
 use tauri::{AppHandle, Emitter, State};
 
 const BRIDGE_SOCKET: &str = "muxlane-p3";
+const WSL_ENV: &str = "/usr/bin/env";
+const GATEWAY_EXECUTABLE: &str = "muxlaned";
 const EVENT_NAME: &str = "phase3-terminal-frame";
 const MAX_PENDING_REQUESTS: usize = 32;
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -40,7 +42,15 @@ pub struct Phase3Bridge {
 impl Phase3Bridge {
     fn start(app: AppHandle) -> Result<Self, Phase3Error> {
         let mut child = Command::new("wsl.exe")
-            .args(["--exec", "muxlaned", "phase3", "gateway", "--socket", BRIDGE_SOCKET])
+            .args([
+                "--exec",
+                WSL_ENV,
+                GATEWAY_EXECUTABLE,
+                "phase3",
+                "gateway",
+                "--socket",
+                BRIDGE_SOCKET,
+            ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -319,11 +329,13 @@ fn display_error(error: Phase3Error) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{BRIDGE_SOCKET, EVENT_NAME, MAX_PENDING_REQUESTS};
+    use super::{BRIDGE_SOCKET, EVENT_NAME, GATEWAY_EXECUTABLE, MAX_PENDING_REQUESTS, WSL_ENV};
 
     #[test]
     fn bridge_contract_is_fixed_and_bounded() {
         assert_eq!(BRIDGE_SOCKET, "muxlane-p3");
+        assert_eq!(WSL_ENV, "/usr/bin/env");
+        assert_eq!(GATEWAY_EXECUTABLE, "muxlaned");
         assert_eq!(EVENT_NAME, "phase3-terminal-frame");
         assert_eq!(MAX_PENDING_REQUESTS, 32);
     }
