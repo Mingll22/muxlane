@@ -6,15 +6,16 @@
 #![forbid(unsafe_code)]
 
 mod lifecycle;
-mod phase3;
 mod runtime;
+
+#[cfg(test)]
+mod phase3;
 
 use tauri::Manager;
 
 /// Starts the desktop shell with the formal control and Terminal data planes.
 pub fn run() -> tauri::Result<()> {
     tauri::Builder::default()
-        .manage(phase3::Phase3State::new())
         .manage(runtime::RuntimeState::new())
         .manage(lifecycle::LifecycleState::new())
         .setup(lifecycle::setup)
@@ -28,18 +29,6 @@ pub fn run() -> tauri::Result<()> {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            phase3::phase3_probe,
-            phase3::phase3_list_sessions,
-            phase3::phase3_create_synthetic_session,
-            phase3::phase3_list_windows,
-            phase3::phase3_create_window,
-            phase3::phase3_attach,
-            phase3::phase3_start_stream,
-            phase3::phase3_detach,
-            phase3::phase3_send_input,
-            phase3::phase3_resize,
-            phase3::phase3_close_window,
-            phase3::phase3_cleanup_session,
             runtime::runtime_doctor,
             runtime::runtime_environment_check,
             runtime::runtime_handshake,

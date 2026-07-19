@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Phase 3 grants only Tauri core events and window basics. The custom command surface is registered explicitly; no shell, filesystem, process, or network plugin is permitted.",
+  "description": "Muxlane grants only Tauri core events and the explicitly registered formal runtime commands; no shell, filesystem, process, or network plugin is permitted.",
   "windows": ["main"],
   "permissions": ["core:default"]
 }
