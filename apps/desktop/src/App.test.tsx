@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 const project = {
@@ -74,5 +74,16 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /历史/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /文件/ })).toBeInTheDocument();
     expect(screen.queryByText(/synthetic Session|PHASE 3/)).not.toBeInTheDocument();
+  });
+
+  it('exposes complete non-secret Project template fields', async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByLabelText('Muxlane 正式终端')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /模板/ }));
+    expect(screen.getByLabelText('模板名称')).toBeInTheDocument();
+    expect(screen.getByLabelText('默认模型')).toHaveValue('gpt-5.6-sol');
+    expect(screen.getByLabelText('Reasoning')).toHaveValue('high');
+    expect(screen.getByLabelText('Terminal 预设名称')).toHaveValue('Shell');
+    expect(screen.getByText(/不会在应用时自动启动/)).toBeInTheDocument();
   });
 });

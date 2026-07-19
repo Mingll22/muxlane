@@ -159,17 +159,19 @@ pub fn apply_template(
     template_id: &str,
 ) -> CoreResult<ProjectSettings> {
     let template = template(storage, template_id)?;
+    let current = project_settings(storage, project_id)?;
     let settings = save_project_settings(
         storage,
         project_id,
-        None,
+        current.default_account_id.as_deref(),
         &template.default_model,
         &template.reasoning,
     )?;
     for preset in template.command_presets {
+        let existing_id = command_preset_id_by_name(storage, project_id, &preset.name)?;
         let _ = save_command_preset(
             storage,
-            None,
+            existing_id.as_deref(),
             project_id,
             &preset.name,
             &preset.description,
@@ -179,6 +181,22 @@ pub fn apply_template(
         )?;
     }
     Ok(settings)
+}
+
+fn command_preset_id_by_name(
+    storage: &Storage,
+    project_id: &str,
+    name: &str,
+) -> CoreResult<Option<String>> {
+    storage
+        .connect()?
+        .query_row(
+            "SELECT preset_id FROM command_presets WHERE project_id=? AND name=?",
+            params![project_id, name.trim()],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(Into::into)
 }
 
 pub fn list_command_presets(storage: &Storage, project_id: &str) -> CoreResult<Vec<CommandPreset>> {
@@ -536,6 +554,7 @@ mod tests {
             }],
         )
         .unwrap();
+        apply_template(&storage, &project.project_id, &template.template_id).unwrap();
         apply_template(&storage, &project.project_id, &template.template_id).unwrap();
         assert_eq!(list_command_presets(&storage, &project.project_id).unwrap().len(), 1);
         append_history(&storage, &project.project_id, None, None, "shell", "cargo test").unwrap();

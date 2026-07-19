@@ -608,10 +608,15 @@ export function AppShell() {
             ) : null}
             {view === 'templates' ? (
               <TemplatesPanel
+                key={`${selectedProjectId ?? 'none'}-${settings?.updated_at ?? 'loading'}`}
                 templates={templates}
                 selectedProject={selectedProject}
+                settings={settings}
+                presets={presets}
                 run={run}
-                refresh={loadGlobal}
+                refresh={async () => {
+                  await Promise.all([loadGlobal(), refreshSelectedProject()]);
+                }}
               />
             ) : null}
             {view === 'history' ? (
@@ -942,6 +947,9 @@ function ProjectsPanel({
   const [reasoning, setReasoning] = useState(settings?.reasoning ?? 'high');
   const [account, setAccount] = useState(settings?.default_account_id ?? '');
   const [presetName, setPresetName] = useState('');
+  const [presetDescription, setPresetDescription] = useState('');
+  const [presetTerminalKind, setPresetTerminalKind] = useState('shell');
+  const [presetWorkingDirectory, setPresetWorkingDirectory] = useState('');
   const [presetCommand, setPresetCommand] = useState('');
   return (
     <>
@@ -1093,6 +1101,33 @@ function ProjectsPanel({
                 />
               </label>
               <label>
+                说明
+                <input
+                  value={presetDescription}
+                  onChange={(e) => setPresetDescription(e.target.value)}
+                  placeholder="运行 Workspace 验证"
+                />
+              </label>
+              <label>
+                Terminal 类型
+                <select
+                  value={presetTerminalKind}
+                  onChange={(e) => setPresetTerminalKind(e.target.value)}
+                >
+                  <option value="shell">Shell</option>
+                  <option value="codex">Codex</option>
+                  <option value="auxiliary">辅助终端</option>
+                </select>
+              </label>
+              <label>
+                Project 内工作目录
+                <input
+                  value={presetWorkingDirectory}
+                  onChange={(e) => setPresetWorkingDirectory(e.target.value)}
+                  placeholder="留空表示 Project 根目录"
+                />
+              </label>
+              <label>
                 命令
                 <input
                   value={presetCommand}
@@ -1109,12 +1144,15 @@ function ProjectsPanel({
                     preset_id: '',
                     project_id: selectedProject.project_id,
                     name: presetName,
-                    description: '',
-                    terminal_kind: 'shell',
-                    working_directory: '',
+                    description: presetDescription,
+                    terminal_kind: presetTerminalKind,
+                    working_directory: presetWorkingDirectory,
                     command: presetCommand,
                   });
                   setPresetName('');
+                  setPresetDescription('');
+                  setPresetTerminalKind('shell');
+                  setPresetWorkingDirectory('');
                   setPresetCommand('');
                   await refresh();
                 }, '命令预设已保存')
@@ -1128,6 +1166,10 @@ function ProjectsPanel({
                 <span key={preset.preset_id}>
                   <strong>{preset.name}</strong>
                   <small>{preset.command}</small>
+                  <small>
+                    {preset.terminal_kind} · {preset.working_directory || 'Project 根目录'}
+                    {preset.description ? ` · ${preset.description}` : ''}
+                  </small>
                   <em>
                     <button onClick={() => fillComposer(preset.command)} type="button">
                       填入
@@ -1271,44 +1313,100 @@ function RecoveryPanel({
 function TemplatesPanel({
   templates,
   selectedProject,
+  settings,
+  presets,
   run,
   refresh,
 }: {
   templates: ProjectTemplate[];
   selectedProject: Project | null;
+  settings: ProjectSettings | null;
+  presets: CommandPreset[];
   run: Run;
   refresh: () => Promise<void>;
 }) {
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [model, setModel] = useState(settings?.default_model ?? 'gpt-5.6-sol');
+  const [reasoning, setReasoning] = useState(settings?.reasoning ?? 'high');
+  const [terminalName, setTerminalName] = useState('Shell');
+  const [terminalKind, setTerminalKind] = useState('shell');
   return (
     <>
       <Section
         title="创建轻量模板"
         description="模板只保存模型、Reasoning、Terminal 和命令预设，不包含 Skills、MCP、Plugins 或秘密。"
       >
-        <label>
-          模板名称
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Rust 高强度开发"
-          />
-        </label>
+        <div className="field-grid">
+          <label>
+            模板名称
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Rust 高强度开发"
+            />
+          </label>
+          <label>
+            说明
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="适合日常 Rust 开发与验证"
+            />
+          </label>
+          <label>
+            默认模型
+            <input value={model} onChange={(e) => setModel(e.target.value)} />
+          </label>
+          <label>
+            Reasoning
+            <select value={reasoning} onChange={(e) => setReasoning(e.target.value)}>
+              <option>low</option>
+              <option>medium</option>
+              <option>high</option>
+              <option>xhigh</option>
+            </select>
+          </label>
+          <label>
+            Terminal 预设名称
+            <input value={terminalName} onChange={(e) => setTerminalName(e.target.value)} />
+          </label>
+          <label>
+            Terminal 类型
+            <select value={terminalKind} onChange={(e) => setTerminalKind(e.target.value)}>
+              <option value="shell">Shell</option>
+              <option value="codex">Codex</option>
+              <option value="auxiliary">辅助终端</option>
+            </select>
+          </label>
+        </div>
+        <p className="section-note">
+          {selectedProject
+            ? `将包含 ${selectedProject.name} 的 ${presets.length} 个命令预设；Terminal 预设作为安全蓝图保存，不会在应用时自动启动。`
+            : '选择 Project 后可把其命令预设一并写入模板。'}
+        </p>
         <button
           className="primary-button"
-          disabled={!name}
+          disabled={!name || !model || !terminalName}
           onClick={() =>
             void run(async () => {
               await controlBridge.saveTemplate({
                 template_id: '',
                 name,
-                description: 'Muxlane Project template',
-                default_model: 'gpt-5.6-sol',
-                reasoning: 'high',
-                terminal_presets: [{ name: 'Shell', kind: 'shell' }],
-                command_presets: [],
+                description,
+                default_model: model,
+                reasoning,
+                terminal_presets: [{ name: terminalName, kind: terminalKind }],
+                command_presets: presets.map((preset) => ({
+                  name: preset.name,
+                  description: preset.description,
+                  terminal_kind: preset.terminal_kind,
+                  working_directory: preset.working_directory,
+                  command: preset.command,
+                })),
               });
               setName('');
+              setDescription('');
               await refresh();
             }, '模板已创建')
           }
@@ -1325,6 +1423,10 @@ function TemplatesPanel({
                 <strong>{template.name}</strong>
                 <small>
                   {template.default_model} · reasoning {template.reasoning}
+                </small>
+                <small>
+                  {template.terminal_presets.length} Terminal · {template.command_presets.length}{' '}
+                  命令
                 </small>
                 <p>{template.description}</p>
               </div>
