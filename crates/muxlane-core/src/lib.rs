@@ -17,6 +17,8 @@ pub mod session;
 pub mod storage;
 pub mod terminal;
 pub mod usage;
+pub mod workbench;
+pub mod workspace;
 
 pub use error::{CoreError, CoreResult};
 

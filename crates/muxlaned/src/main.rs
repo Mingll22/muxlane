@@ -28,7 +28,7 @@ use muxlane_core::{
     lock::ManagedLock,
     recovery, service, session,
     storage::{OperationClaim, Storage},
-    terminal, usage,
+    terminal, usage, workbench, workspace,
 };
 use muxlane_protocol::{
     CAPABILITIES, ControlRequest, ControlResponse, HandshakeResponse, HealthResponse,
@@ -362,6 +362,11 @@ fn dispatch(state: &ServerState, request: &ControlRequest) -> Result<ControlResp
                 Ok(ControlResponse::Launch(launch))
             },
         ),
+        ControlRequest::LaunchStop { launch_id, operation_id } => {
+            idempotent(state, operation_id, "launch.stop", json!({"launch_id":launch_id}), || {
+                Ok(ControlResponse::Launch(service::stop_launch(&state.storage, launch_id)?))
+            })
+        }
         ControlRequest::LaunchList => Ok(ControlResponse::Launches(state.storage.list_launches()?)),
         ControlRequest::RecoveryScan { operation_id } => {
             idempotent(state, operation_id, "recovery.scan", json!({}), || {
@@ -455,6 +460,229 @@ fn dispatch(state: &ServerState, request: &ControlRequest) -> Result<ControlResp
             idempotent(state, operation_id, "diagnostics.export", json!({}), || {
                 Ok(ControlResponse::Diagnostics(diagnostics::export(&state.storage)?))
             })
+        }
+        ControlRequest::WorkbenchSettingsRead { project_id } => {
+            Ok(ControlResponse::ProjectSettings(workbench::project_settings(
+                &state.storage,
+                project_id,
+            )?))
+        }
+        ControlRequest::WorkbenchSettingsSave {
+            project_id,
+            default_account_id,
+            default_model,
+            reasoning,
+            operation_id,
+        } => idempotent(
+            state,
+            operation_id,
+            "workbench.settings.save",
+            json!({"project_id":project_id,"default_account_id":default_account_id,"default_model":default_model,"reasoning":reasoning}),
+            || {
+                Ok(ControlResponse::ProjectSettings(workbench::save_project_settings(
+                    &state.storage,
+                    project_id,
+                    default_account_id.as_deref(),
+                    default_model,
+                    reasoning,
+                )?))
+            },
+        ),
+        ControlRequest::WorkbenchTemplateList => {
+            Ok(ControlResponse::ProjectTemplates(workbench::list_templates(&state.storage)?))
+        }
+        ControlRequest::WorkbenchTemplateSave {
+            template_id,
+            name,
+            description,
+            default_model,
+            reasoning,
+            terminal_presets,
+            command_presets,
+            operation_id,
+        } => idempotent(
+            state,
+            operation_id,
+            "workbench.template.save",
+            json!({"template_id":template_id,"name":name,"description":description,"default_model":default_model,"reasoning":reasoning,"terminal_presets":terminal_presets,"command_presets":command_presets}),
+            || {
+                Ok(ControlResponse::ProjectTemplate(workbench::save_template(
+                    &state.storage,
+                    template_id.as_deref(),
+                    name,
+                    description,
+                    default_model,
+                    reasoning,
+                    terminal_presets.clone(),
+                    command_presets.clone(),
+                )?))
+            },
+        ),
+        ControlRequest::WorkbenchTemplateCopy { template_id, name, operation_id } => idempotent(
+            state,
+            operation_id,
+            "workbench.template.copy",
+            json!({"template_id":template_id,"name":name}),
+            || {
+                Ok(ControlResponse::ProjectTemplate(workbench::copy_template(
+                    &state.storage,
+                    template_id,
+                    name,
+                )?))
+            },
+        ),
+        ControlRequest::WorkbenchTemplateApply { project_id, template_id, operation_id } => {
+            idempotent(
+                state,
+                operation_id,
+                "workbench.template.apply",
+                json!({"project_id":project_id,"template_id":template_id}),
+                || {
+                    Ok(ControlResponse::ProjectSettings(workbench::apply_template(
+                        &state.storage,
+                        project_id,
+                        template_id,
+                    )?))
+                },
+            )
+        }
+        ControlRequest::WorkbenchTemplateDelete { template_id, operation_id } => idempotent(
+            state,
+            operation_id,
+            "workbench.template.delete",
+            json!({"template_id":template_id}),
+            || {
+                workbench::delete_template(&state.storage, template_id)?;
+                Ok(ControlResponse::Acknowledged)
+            },
+        ),
+        ControlRequest::WorkbenchPresetList { project_id } => Ok(ControlResponse::CommandPresets(
+            workbench::list_command_presets(&state.storage, project_id)?,
+        )),
+        ControlRequest::WorkbenchPresetSave {
+            preset_id,
+            project_id,
+            name,
+            description,
+            terminal_kind,
+            working_directory,
+            command,
+            operation_id,
+        } => idempotent(
+            state,
+            operation_id,
+            "workbench.preset.save",
+            json!({"preset_id":preset_id,"project_id":project_id,"name":name,"description":description,"terminal_kind":terminal_kind,"working_directory":working_directory,"command":command}),
+            || {
+                Ok(ControlResponse::CommandPreset(workbench::save_command_preset(
+                    &state.storage,
+                    preset_id.as_deref(),
+                    project_id,
+                    name,
+                    description,
+                    terminal_kind,
+                    working_directory,
+                    command,
+                )?))
+            },
+        ),
+        ControlRequest::WorkbenchPresetDelete { preset_id, operation_id } => idempotent(
+            state,
+            operation_id,
+            "workbench.preset.delete",
+            json!({"preset_id":preset_id}),
+            || {
+                workbench::delete_command_preset(&state.storage, preset_id)?;
+                Ok(ControlResponse::Acknowledged)
+            },
+        ),
+        ControlRequest::WorkbenchHistoryAppend {
+            project_id,
+            terminal_id,
+            thread_id,
+            kind,
+            input_text,
+            operation_id,
+        } => idempotent(
+            state,
+            operation_id,
+            "workbench.history.append",
+            json!({"project_id":project_id,"terminal_id":terminal_id,"thread_id":thread_id,"kind":kind,"input_text":input_text}),
+            || {
+                Ok(ControlResponse::InputHistoryEntry(workbench::append_history(
+                    &state.storage,
+                    project_id,
+                    terminal_id.as_deref(),
+                    thread_id.as_deref(),
+                    kind,
+                    input_text,
+                )?))
+            },
+        ),
+        ControlRequest::WorkbenchHistorySearch {
+            project_id,
+            terminal_id,
+            thread_id,
+            kind,
+            query,
+            limit,
+        } => Ok(ControlResponse::InputHistory(workbench::search_history(
+            &state.storage,
+            project_id,
+            terminal_id.as_deref(),
+            thread_id.as_deref(),
+            kind.as_deref(),
+            query,
+            *limit,
+        )?)),
+        ControlRequest::WorkbenchHistoryDelete { history_id, operation_id } => idempotent(
+            state,
+            operation_id,
+            "workbench.history.delete",
+            json!({"history_id":history_id}),
+            || {
+                workbench::delete_history(&state.storage, history_id)?;
+                Ok(ControlResponse::Acknowledged)
+            },
+        ),
+        ControlRequest::WorkbenchHistoryClearProject { project_id, operation_id } => idempotent(
+            state,
+            operation_id,
+            "workbench.history.clear_project",
+            json!({"project_id":project_id}),
+            || {
+                Ok(ControlResponse::DeletedCount {
+                    count: workbench::clear_project_history(&state.storage, project_id)?,
+                })
+            },
+        ),
+        ControlRequest::WorkspaceList { project_id, relative_directory } => {
+            Ok(ControlResponse::WorkspaceEntries(workspace::list(
+                &state.storage,
+                project_id,
+                relative_directory,
+            )?))
+        }
+        ControlRequest::WorkspaceSearch { project_id, query } => {
+            Ok(ControlResponse::WorkspaceEntries(workspace::search(
+                &state.storage,
+                project_id,
+                query,
+            )?))
+        }
+        ControlRequest::WorkspacePreview { project_id, relative_path } => {
+            Ok(ControlResponse::WorkspacePreview(workspace::preview(
+                &state.storage,
+                project_id,
+                relative_path,
+            )?))
+        }
+        ControlRequest::WorkspaceLocation { project_id, relative_path } => {
+            Ok(ControlResponse::WorkspaceLocation(workspace::location(
+                &state.storage,
+                project_id,
+                relative_path,
+            )?))
         }
     }
 }

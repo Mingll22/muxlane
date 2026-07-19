@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OperationClaim {
@@ -277,6 +277,58 @@ impl Storage {
             )?;
             transaction.commit()?;
         }
+        let current: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if current < 5 {
+            let transaction = connection.transaction()?;
+            transaction.execute_batch(
+                r#"
+                CREATE TABLE project_settings (
+                    project_id TEXT PRIMARY KEY REFERENCES projects(project_id),
+                    runtime TEXT NOT NULL,
+                    default_account_id TEXT REFERENCES accounts(account_id),
+                    default_model TEXT NOT NULL,
+                    reasoning TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+                CREATE TABLE project_templates (
+                    template_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    description TEXT NOT NULL,
+                    default_model TEXT NOT NULL,
+                    reasoning TEXT NOT NULL,
+                    terminal_presets_json TEXT NOT NULL,
+                    command_presets_json TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+                CREATE TABLE command_presets (
+                    preset_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(project_id),
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    terminal_kind TEXT NOT NULL,
+                    working_directory TEXT NOT NULL,
+                    command_text TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    UNIQUE(project_id, name)
+                );
+                CREATE TABLE input_history (
+                    history_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(project_id),
+                    terminal_id TEXT REFERENCES terminals(terminal_id),
+                    thread_id TEXT,
+                    kind TEXT NOT NULL,
+                    input_text TEXT NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
+                CREATE INDEX input_history_scope_time
+                    ON input_history(project_id, terminal_id, thread_id, kind, created_at DESC);
+                PRAGMA user_version = 5;
+                "#,
+            )?;
+            transaction.commit()?;
+        }
         Ok(())
     }
 
@@ -430,6 +482,26 @@ impl Storage {
             )
             .optional()?
             .ok_or_else(|| CoreError::new("NOT_FOUND", "launch transaction was not found"))
+    }
+
+    pub fn transaction_for_launch(&self, launch_id: &str) -> CoreResult<LaunchTransaction> {
+        let transaction_id: String = self
+            .connect()?
+            .query_row(
+                "SELECT transaction_id FROM launches WHERE launch_id=?",
+                [launch_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or_else(|| CoreError::new("NOT_FOUND", "launch was not found"))?;
+        self.transaction(&transaction_id)
+    }
+
+    pub fn launch_view(&self, launch_id: &str) -> CoreResult<LaunchView> {
+        self.list_launches()?
+            .into_iter()
+            .find(|launch| launch.launch_id == launch_id)
+            .ok_or_else(|| CoreError::new("NOT_FOUND", "launch was not found"))
     }
 
     pub fn list_nonterminal_transactions(&self) -> CoreResult<Vec<LaunchTransaction>> {

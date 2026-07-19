@@ -14,10 +14,12 @@ use std::{
 };
 
 use muxlane_protocol::{
-    TERMINAL_DATA_PROTOCOL_MAJOR, TERMINAL_DATA_PROTOCOL_MINOR, TerminalDataError,
+    CAPABILITIES, ControlRequest, ControlResponse, HandshakeRequest, PROTOCOL_MAJOR,
+    PROTOCOL_MINOR, TERMINAL_DATA_PROTOCOL_MAJOR, TERMINAL_DATA_PROTOCOL_MINOR, TerminalDataError,
     TerminalDataFrame, TerminalDataRequest, TerminalDataRequestEnvelope, TerminalDataResponse,
     TerminalDataResult, TerminalStream,
 };
+use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, State};
 
@@ -202,9 +204,137 @@ fn fixed_cli(arguments: &[&str]) -> Result<Value, String> {
     Ok(value)
 }
 
+fn fixed_control(request: &ControlRequest) -> Result<Value, String> {
+    let encoded = serde_json::to_string(request)
+        .map_err(|_| "cannot encode fixed muxlane control request".to_owned())?;
+    fixed_cli(&["control", &encoded])
+}
+
+#[derive(Debug, Serialize)]
+pub struct EnvironmentCheck {
+    key: &'static str,
+    status: &'static str,
+    version: Option<String>,
+    suggestion: Option<&'static str>,
+}
+
+fn fixed_wsl_probe(key: &'static str, executable: &str, version_arg: &str) -> EnvironmentCheck {
+    let output = Command::new("wsl.exe")
+        .args(["--exec", "/usr/bin/env", executable, version_arg])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output();
+    match output {
+        Ok(output) if output.status.success() => EnvironmentCheck {
+            key,
+            status: "ready",
+            version: String::from_utf8(output.stdout)
+                .ok()
+                .map(|value| value.lines().next().unwrap_or_default().trim().to_owned())
+                .filter(|value| !value.is_empty()),
+            suggestion: None,
+        },
+        _ => EnvironmentCheck {
+            key,
+            status: "unavailable",
+            version: None,
+            suggestion: Some("请在默认 WSL 发行版安装并确认该组件可从 PATH 访问。"),
+        },
+    }
+}
+
 #[tauri::command]
 pub fn runtime_doctor() -> Result<Value, String> {
     fixed_cli(&["doctor"])
+}
+
+#[tauri::command]
+pub fn runtime_environment_check() -> Vec<EnvironmentCheck> {
+    let wsl = match Command::new("wsl.exe")
+        .arg("--status")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+    {
+        Ok(status) if status.success() => {
+            EnvironmentCheck { key: "wsl", status: "ready", version: None, suggestion: None }
+        }
+        _ => EnvironmentCheck {
+            key: "wsl",
+            status: "unavailable",
+            version: None,
+            suggestion: Some("请启用 WSL2 并安装默认 Ubuntu 发行版。"),
+        },
+    };
+    vec![
+        EnvironmentCheck {
+            key: "windows",
+            status: if cfg!(target_os = "windows") { "ready" } else { "unsupported" },
+            version: None,
+            suggestion: if cfg!(target_os = "windows") {
+                None
+            } else {
+                Some("Muxlane Desktop 的正式目标是 Windows 10/11 x64。")
+            },
+        },
+        wsl,
+        fixed_wsl_probe("codex", "codex", "--version"),
+        fixed_wsl_probe("tmux", "tmux", "-V"),
+        fixed_wsl_probe("muxlaned", "muxlaned", "--version"),
+    ]
+}
+
+#[tauri::command]
+pub fn runtime_handshake() -> Result<Value, String> {
+    fixed_control(&ControlRequest::SystemHandshake(HandshakeRequest {
+        protocol_major: PROTOCOL_MAJOR,
+        protocol_minor: PROTOCOL_MINOR,
+        client_name: "muxlane_windows_desktop".to_owned(),
+        client_version: env!("CARGO_PKG_VERSION").to_owned(),
+        requested_capabilities: CAPABILITIES.iter().map(|value| (*value).to_owned()).collect(),
+    }))
+}
+
+/// The IPC accepts only the closed `ControlRequest` enum. It cannot express an
+/// executable, shell command, tmux target, or network destination beyond the
+/// finite Protocol 1.0 methods compiled into this binary.
+#[tauri::command]
+pub fn runtime_control(request: ControlRequest) -> Result<Value, String> {
+    fixed_control(&request)
+}
+
+#[tauri::command]
+pub fn runtime_open_workspace_location(
+    project_id: String,
+    relative_path: String,
+) -> Result<(), String> {
+    let value = fixed_control(&ControlRequest::WorkspaceLocation { project_id, relative_path })?;
+    let response: ControlResponse = serde_json::from_value(
+        value
+            .get("result")
+            .cloned()
+            .ok_or_else(|| "muxlane CLI omitted workspace location".to_owned())?,
+    )
+    .map_err(|_| "muxlane CLI returned an invalid workspace location".to_owned())?;
+    let ControlResponse::WorkspaceLocation(location) = response else {
+        return Err("unexpected workspace location response".to_owned());
+    };
+    let windows_path = location
+        .canonical_windows_path
+        .ok_or_else(|| "workspace path has no Windows mapping".to_owned())?;
+    let status = Command::new("explorer.exe")
+        .arg(format!("/select,{windows_path}"))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|_| "Windows Explorer is unavailable".to_owned())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Windows Explorer rejected the workspace location".to_owned())
+    }
 }
 #[tauri::command]
 pub fn runtime_status() -> Result<Value, String> {

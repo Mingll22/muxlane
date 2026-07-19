@@ -12,8 +12,9 @@ use std::{
 use clap as _;
 use muxlane_core as _;
 use muxlane_protocol::{
-    CAPABILITIES, ControlRequest, ControlResponse, HandshakeRequest, PROTOCOL_MAJOR,
-    PROTOCOL_MINOR, RpcRequest, RpcResponse, RpcResponseBody,
+    CAPABILITIES, CommandPresetTemplate, ControlRequest, ControlResponse, HandshakeRequest,
+    PROTOCOL_MAJOR, PROTOCOL_MINOR, RpcRequest, RpcResponse, RpcResponseBody,
+    TerminalPresetTemplate,
 };
 use nix as _;
 use tempfile::TempDir;
@@ -23,6 +24,105 @@ struct Daemon {
     _temp: TempDir,
     root: std::path::PathBuf,
     child: Child,
+}
+
+#[test]
+fn formal_workbench_services_persist_safe_configuration_and_confine_files() {
+    let daemon = Daemon::start();
+    let source = daemon._temp.path().join("workbench-project");
+    fs::create_dir(&source).unwrap();
+    fs::write(source.join("README.md"), "# fixture\nhello\n").unwrap();
+    let mut client = Client::connect(&daemon.root);
+    let project = match client
+        .request(ControlRequest::ProjectRegister {
+            source_path: source.to_string_lossy().into_owned(),
+            name: "workbench".to_owned(),
+            operation_id: operation(),
+        })
+        .unwrap()
+    {
+        ControlResponse::Project(project) => project,
+        _ => unreachable!(),
+    };
+    let template = match client
+        .request(ControlRequest::WorkbenchTemplateSave {
+            template_id: None,
+            name: "Rust".to_owned(),
+            description: "safe defaults".to_owned(),
+            default_model: "gpt-5.6-sol".to_owned(),
+            reasoning: "high".to_owned(),
+            terminal_presets: vec![TerminalPresetTemplate {
+                name: "Shell".to_owned(),
+                kind: "shell".to_owned(),
+            }],
+            command_presets: vec![CommandPresetTemplate {
+                name: "Test".to_owned(),
+                description: "Run tests".to_owned(),
+                terminal_kind: "shell".to_owned(),
+                working_directory: "".to_owned(),
+                command: "cargo test".to_owned(),
+            }],
+            operation_id: operation(),
+        })
+        .unwrap()
+    {
+        ControlResponse::ProjectTemplate(template) => template,
+        _ => unreachable!(),
+    };
+    assert!(matches!(
+        client
+            .request(ControlRequest::WorkbenchTemplateApply {
+                project_id: project.project_id.clone(),
+                template_id: template.template_id,
+                operation_id: operation(),
+            })
+            .unwrap(),
+        ControlResponse::ProjectSettings(_)
+    ));
+    assert!(matches!(
+        client
+            .request(ControlRequest::WorkspacePreview {
+                project_id: project.project_id.clone(),
+                relative_path: "README.md".to_owned(),
+            })
+            .unwrap(),
+        ControlResponse::WorkspacePreview(preview) if preview.content.contains("fixture")
+    ));
+    assert_eq!(
+        client
+            .request(ControlRequest::WorkspacePreview {
+                project_id: project.project_id.clone(),
+                relative_path: "../outside".to_owned(),
+            })
+            .unwrap_err(),
+        "PATH_REJECTED"
+    );
+    assert!(matches!(
+        client
+            .request(ControlRequest::WorkbenchHistoryAppend {
+                project_id: project.project_id.clone(),
+                terminal_id: None,
+                thread_id: None,
+                kind: "prompt".to_owned(),
+                input_text: "review this module".to_owned(),
+                operation_id: operation(),
+            })
+            .unwrap(),
+        ControlResponse::InputHistoryEntry(_)
+    ));
+    assert_eq!(
+        client
+            .request(ControlRequest::WorkbenchHistoryAppend {
+                project_id: project.project_id,
+                terminal_id: None,
+                thread_id: None,
+                kind: "shell".to_owned(),
+                input_text: "Authorization: Bearer do-not-store".to_owned(),
+                operation_id: operation(),
+            })
+            .unwrap_err(),
+        "SENSITIVE_CONTENT_REJECTED"
+    );
 }
 
 impl Daemon {
