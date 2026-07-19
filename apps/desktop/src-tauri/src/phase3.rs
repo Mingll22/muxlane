@@ -160,14 +160,14 @@ fn forward_frames(
             };
             match frame {
                 Phase3Frame::Response { id, result } => {
-                    if let Ok(mut pending) = pending.lock() {
-                        if let Some(sender) = pending.remove(&id) {
-                            let result = match result {
-                                ResultFrame::Ok { response } => Ok(response),
-                                ResultFrame::Error { error } => Err(error),
-                            };
-                            let _ = sender.send(result);
-                        }
+                    if let Ok(mut pending) = pending.lock()
+                        && let Some(sender) = pending.remove(&id)
+                    {
+                        let result = match result {
+                            ResultFrame::Ok { response } => Ok(response),
+                            ResultFrame::Error { error } => Err(error),
+                        };
+                        let _ = sender.send(result);
                     }
                 }
                 Phase3Frame::Event { event } => {
