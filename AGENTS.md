@@ -2,17 +2,18 @@
 
 ## 定位与阶段
 
-Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。当前处于阶段 1：需求与架构设计冻结；阶段 0 的工程基础已完成。阶段 1 的设计文档不是业务实现：不要提前实现账号、凭证、项目注册、`CODEX_HOME`、协议、daemon 行为、终端、tmux、额度、配置资产治理、更新或发布能力。后续 POC 若推翻冻结假设，必须通过新的 ADR 修订，不能静默改写已接受决策。
+Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。阶段 1 的需求与架构已冻结，阶段 2 Runtime POC 与阶段 3 Terminal POC 已完成验证；下一阶段是尚未开始的 Phase 4。阶段 2/3 代码仍是明确的非生产 POC，不得描述为正式 daemon、协议或产品能力。不要在没有独立任务时提前实现 Phase 4 的锁、事务、Crash Recovery 或重启恢复，也不要提前进入 Phase 5～7。后续 POC 若推翻冻结假设，必须通过新的 ADR 修订，不能静默改写已接受决策。
 
 ## 目录职责
 
 - `apps/desktop`：Tauri 2 + React 桌面外壳；首版 UI 使用简体中文。
 - `apps/desktop/src-tauri`：最小原生入口和最小权限配置。
 - `crates/muxlane-core`：共享核心边界；阶段 0 没有正式领域模型。
-- `crates/muxlane-protocol`：未来协议边界；阶段 0 没有 RPC 契约。
-- `crates/muxlaned`：WSL daemon 二进制边界。
+- `crates/muxlane-protocol`：共享 typed 边界；Phase 3 frame 仍是 POC 契约，不是稳定 RPC。
+- `crates/muxlaned`：WSL daemon 二进制边界；当前包含非生产 Phase 3 stdio Gateway/synthetic runner。
 - `crates/muxlane-cli`：WSL CLI 二进制边界。
 - `docs/adr`：长期架构决策记录。
+- `docs/poc/phase-3-terminal`：Phase 3 Terminal POC 的设计、真实 Windows/WSL 证据与限制。
 
 ## Git 与验证
 
@@ -52,4 +53,4 @@ pnpm verify
 - 不让 Demo 级假实现进入主分支。
 - 新依赖必须有当前调用方和明确用途。
 - 影响长期边界的架构决策需要 ADR。
-- 阶段 1 前不得冻结未经讨论的正式协议和数据模型。
+- 不得把 Phase 2/3 POC frame、Gateway 或 synthetic runner 冻结为正式协议和生产实现。
