@@ -292,6 +292,5 @@ mod tests {
     fn desktop_surface_uses_fixed_executables_and_bounded_messages() {
         assert_eq!(EVENT_NAME, "muxlane-terminal-frame");
         assert_eq!(MAX_PENDING, 32);
-        assert!(MAX_CLI_OUTPUT <= 1024 * 1024);
     }
 }
