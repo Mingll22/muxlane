@@ -2,7 +2,7 @@
 
 #![forbid(unsafe_code)]
 
-use tauri as _;
+use {muxlane_protocol as _, serde_json as _, tauri as _};
 
 fn main() {
     if let Err(error) = muxlane_desktop::run() {

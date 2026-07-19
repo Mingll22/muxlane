@@ -17,6 +17,8 @@ path = "src/main.rs"
 tauri-build.workspace = true
 
 [dependencies]
+muxlane-protocol = { path = "../../../crates/muxlane-protocol" }
+serde_json.workspace = true
 tauri.workspace = true
 
 [lints]

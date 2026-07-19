@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Phase 0 desktop shell has no plugin, filesystem, shell, process, network, or custom command permissions.",
+  "description": "Phase 3 grants only Tauri core events and window basics. The custom command surface is registered explicitly; no shell, filesystem, process, or network plugin is permitted.",
   "windows": ["main"],
-  "permissions": []
+  "permissions": ["core:default"]
 }

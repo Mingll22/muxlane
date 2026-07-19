@@ -23,6 +23,8 @@ categories = ["command-line-utilities"]
 
 [workspace.dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.150" }
 tauri = { version = "2.11.5" }
 tauri-build = { version = "2.6.3" }
 

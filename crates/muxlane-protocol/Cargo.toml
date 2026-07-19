@@ -8,5 +8,11 @@ license.workspace = true
 repository.workspace = true
 description = "Future protocol boundary for Muxlane"
 
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
 [lints]
 workspace = true
