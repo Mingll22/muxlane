@@ -163,12 +163,10 @@ pub fn create_auxiliary(storage: &Storage, project_id: &str, name: &str) -> Core
 
 pub fn history_bootstrap(storage: &Storage, terminal_id: &str) -> CoreResult<Vec<u8>> {
     validate_id(terminal_id)?;
-    let terminal = storage
-        .list_projects()?
-        .into_iter()
-        .flat_map(|project| storage.list_terminals(&project.project_id).unwrap_or_default())
-        .find(|terminal| terminal.terminal_id == terminal_id)
-        .ok_or_else(|| CoreError::new("NOT_FOUND", "Terminal was not found"))?;
+    let terminal = storage.terminal(terminal_id)?;
+    if terminal.lifecycle_status == "closed" {
+        return Err(CoreError::new("INVALID_STATE", "Terminal is closed"));
+    }
     let project = storage.project(&terminal.project_id)?;
     verify_session_identity(&project.tmux_session_name, &project.project_id)?;
     validate_window_id(&terminal.tmux_window_identity)?;
@@ -183,6 +181,48 @@ pub fn history_bootstrap(storage: &Storage, terminal_id: &str) -> CoreResult<Vec
     }
     let start = output.stdout.len().saturating_sub(MAX_HISTORY_BYTES);
     Ok(output.stdout[start..].to_vec())
+}
+
+pub fn close(storage: &Storage, terminal_id: &str) -> CoreResult<Terminal> {
+    validate_id(terminal_id)?;
+    let terminal = storage.terminal(terminal_id)?;
+    if terminal.lifecycle_status == "closed" {
+        return Ok(terminal);
+    }
+    let project = storage.project_including_archived(&terminal.project_id)?;
+    verify_session_identity(&project.tmux_session_name, &project.project_id)?;
+    validate_window_id(&terminal.tmux_window_identity)?;
+    let target = format!("{}:{}", project.tmux_session_name, terminal.tmux_window_identity);
+    let status = Command::new("tmux")
+        .args(["-L", TMUX_SOCKET, "kill-window", "-t", &target])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|_| CoreError::new("CAPABILITY_UNAVAILABLE", "tmux is unavailable"))?;
+    if !status.success() {
+        return Err(CoreError::new("NOT_FOUND", "managed tmux window was not found"));
+    }
+    storage.close_terminal(terminal_id)
+}
+
+pub fn managed_session_exists(storage: &Storage, project_id: &str) -> CoreResult<bool> {
+    let project = storage.project_including_archived(project_id)?;
+    let status = Command::new("tmux")
+        .args(["-L", TMUX_SOCKET, "has-session", "-t", &project.tmux_session_name])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    match status {
+        Ok(status) if status.success() => {
+            verify_session_identity(&project.tmux_session_name, project_id)?;
+            Ok(true)
+        }
+        Ok(_) => Ok(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err(CoreError::new("CAPABILITY_UNAVAILABLE", "tmux is unavailable")),
+    }
 }
 
 fn verify_session_identity(session: &str, project_id: &str) -> CoreResult<()> {

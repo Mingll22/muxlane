@@ -1,8 +1,9 @@
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
+    path::Path,
     process::{Command, Stdio},
-    sync::mpsc,
+    sync::{Condvar, Mutex, OnceLock, mpsc},
     thread,
     time::Duration,
 };
@@ -15,12 +16,43 @@ use crate::{
     credential::{checkout_query_home, cleanup_query_home},
     layout::{hex_sha256, validate_id},
     lock::ManagedLock,
-    model::{CapabilityProbe, UsageSnapshot, UsageWindow},
+    model::{CapabilityProbe, UsageRefreshResult, UsageSnapshot, UsageWindow},
     storage::{Storage, now},
 };
 
 const QUERY_TIMEOUT: Duration = Duration::from_secs(10);
 const CACHE_SECONDS: i64 = 300;
+pub const MAX_CONCURRENT_USAGE_QUERIES: usize = 4;
+
+static QUERY_LIMIT: OnceLock<(Mutex<usize>, Condvar)> = OnceLock::new();
+
+struct QueryPermit;
+
+impl QueryPermit {
+    fn acquire() -> CoreResult<Self> {
+        let (mutex, ready) = QUERY_LIMIT.get_or_init(|| (Mutex::new(0), Condvar::new()));
+        let active = mutex
+            .lock()
+            .map_err(|_| CoreError::new("INTERNAL_ERROR", "Usage limiter is unavailable"))?;
+        let mut active =
+            ready
+                .wait_while(active, |count| *count >= MAX_CONCURRENT_USAGE_QUERIES)
+                .map_err(|_| CoreError::new("INTERNAL_ERROR", "Usage limiter is unavailable"))?;
+        *active += 1;
+        Ok(Self)
+    }
+}
+
+impl Drop for QueryPermit {
+    fn drop(&mut self) {
+        if let Some((mutex, ready)) = QUERY_LIMIT.get()
+            && let Ok(mut active) = mutex.lock()
+        {
+            *active = active.saturating_sub(1);
+            ready.notify_one();
+        }
+    }
+}
 
 pub fn probe_capabilities(storage: &Storage, account_id: &str) -> CoreResult<CapabilityProbe> {
     validate_id(account_id)?;
@@ -68,6 +100,7 @@ pub fn probe_capabilities(storage: &Storage, account_id: &str) -> CoreResult<Cap
 }
 
 pub fn refresh_usage(storage: &Storage, account_id: &str) -> CoreResult<UsageSnapshot> {
+    let _permit = QueryPermit::acquire()?;
     let probe = probe_capabilities(storage, account_id)?;
     if !probe.account_read || !probe.rate_limits_read {
         return Err(CoreError::new(
@@ -97,13 +130,64 @@ pub fn refresh_usage(storage: &Storage, account_id: &str) -> CoreResult<UsageSna
     }
 }
 
+pub fn refresh_batch(
+    storage: &Storage,
+    account_ids: &[String],
+) -> CoreResult<Vec<UsageRefreshResult>> {
+    if account_ids.is_empty() || account_ids.len() > 128 {
+        return Err(CoreError::new("INVALID_REQUEST", "Usage batch must contain 1..=128 accounts"));
+    }
+    let mut unique = std::collections::BTreeSet::new();
+    for account_id in account_ids {
+        validate_id(account_id)?;
+        storage.account(account_id)?;
+        if !unique.insert(account_id.clone()) {
+            return Err(CoreError::new(
+                "INVALID_REQUEST",
+                "Usage batch contains a duplicate account",
+            ));
+        }
+    }
+    let (sender, receiver) = mpsc::channel();
+    for account_id in unique {
+        let storage = storage.clone();
+        let sender = sender.clone();
+        thread::spawn(move || {
+            let result = match refresh_usage(&storage, &account_id) {
+                Ok(snapshot) => {
+                    UsageRefreshResult { account_id, snapshot: Some(snapshot), error_code: None }
+                }
+                Err(error) => UsageRefreshResult {
+                    account_id,
+                    snapshot: None,
+                    error_code: Some(error.code.to_owned()),
+                },
+            };
+            let _ = sender.send(result);
+        });
+    }
+    drop(sender);
+    let mut results: Vec<_> = receiver.into_iter().collect();
+    results.sort_by(|left, right| left.account_id.cmp(&right.account_id));
+    Ok(results)
+}
+
 fn query_app_server(
-    _storage: &Storage,
+    storage: &Storage,
     account_id: &str,
     probe: &CapabilityProbe,
 ) -> CoreResult<UsageSnapshot> {
-    let query_home = _storage.layout().query_home(account_id)?;
-    let mut child = Command::new("codex")
+    query_app_server_with_executable(storage, account_id, probe, Path::new("codex"))
+}
+
+fn query_app_server_with_executable(
+    storage: &Storage,
+    account_id: &str,
+    probe: &CapabilityProbe,
+    executable: &Path,
+) -> CoreResult<UsageSnapshot> {
+    let query_home = storage.layout().query_home(account_id)?;
+    let mut child = Command::new(executable)
         .args(["app-server", "--stdio"])
         .env("CODEX_HOME", &query_home)
         .stdin(Stdio::piped())
@@ -291,6 +375,8 @@ fn directory_contains(root: &std::path::Path, needle: &str) -> CoreResult<bool> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{fs, os::unix::fs::PermissionsExt};
+    use tempfile::tempdir;
 
     #[test]
     fn normalizes_semantic_usage_windows_without_persisting_raw_response() {
@@ -314,5 +400,45 @@ mod tests {
         assert_eq!(snapshot.lifetime_tokens, Some(1234));
         assert_eq!(snapshot.reset_credit_available, Some(2));
         assert!(!serde_json::to_string(&snapshot).unwrap().contains("private@example.test"));
+    }
+
+    #[test]
+    fn fake_app_server_covers_handshake_capability_mapping_and_query_home() {
+        let temp = tempdir().unwrap();
+        let layout = crate::layout::Layout::initialize(temp.path().join("runtime")).unwrap();
+        layout.ensure_account("account_fixture").unwrap();
+        let storage = Storage::open(layout).unwrap();
+        let fake = temp.path().join("fake-codex");
+        fs::write(
+            &fake,
+            r#"#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"id":0'*) echo '{"id":0,"result":{}}' ;;
+    *'"id":1'*) echo '{"id":1,"result":{"account":{"type":"chatgpt","planType":"fixture"}}}' ;;
+    *'"id":2'*) echo '{"id":2,"result":{"primary":{"windowDurationMins":300,"usedPercent":8,"resetsAt":10},"secondary":{"windowDurationMins":10080,"usedPercent":9,"resetsAt":20},"rateLimitResetCredits":{"availableCount":3}}}' ;;
+    *'"id":3'*) echo '{"id":3,"result":{"summary":{"lifetimeTokens":44}}}' ;;
+  esac
+done
+"#,
+        ).unwrap();
+        fs::set_permissions(&fake, fs::Permissions::from_mode(0o700)).unwrap();
+        let probe = CapabilityProbe {
+            codex_version: "fake-codex 1".to_owned(),
+            schema_fingerprint: "fixture".to_owned(),
+            account_read: true,
+            rate_limits_read: true,
+            token_usage_read: true,
+            reset_credits: true,
+        };
+        let snapshot =
+            query_app_server_with_executable(&storage, "account_fixture", &probe, &fake).unwrap();
+        assert_eq!(
+            snapshot.windows.iter().map(|window| window.duration_minutes).collect::<Vec<_>>(),
+            vec![Some(300), Some(10080)]
+        );
+        assert_eq!(snapshot.reset_credit_available, Some(3));
+        assert_eq!(snapshot.lifetime_tokens, Some(44));
+        assert_eq!(snapshot.login_status, "authenticated");
     }
 }

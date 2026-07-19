@@ -19,6 +19,7 @@ pub struct DiagnosticReceipt {
 
 pub fn export(storage: &Storage) -> CoreResult<DiagnosticReceipt> {
     let (accounts, projects, launches, incidents) = storage.counts()?;
+    let incomplete_recovery_runs = storage.incomplete_recovery_runs()?;
     let export_id = format!("diagnostics_{}", Uuid::new_v4().simple());
     let file_name = format!("{export_id}.json");
     let value = json!({
@@ -33,6 +34,7 @@ pub fn export(storage: &Storage) -> CoreResult<DiagnosticReceipt> {
             "projects": projects,
             "launches": launches,
             "recovery_incidents": incidents
+            ,"incomplete_recovery_runs": incomplete_recovery_runs
         },
         "privacy": {
             "credentials_included": false,

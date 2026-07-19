@@ -12,7 +12,8 @@ use serde_json::Value;
 use muxlane_core::{
     diagnostics::DiagnosticReceipt,
     model::{
-        Account, CapabilityProbe, LaunchView, Project, RecoveryResult, Terminal, UsageSnapshot,
+        Account, CapabilityProbe, LaunchView, Project, RecoveryIncident, RecoveryResult, Terminal,
+        ThreadIndex, UsageRefreshResult, UsageSnapshot,
     },
 };
 
@@ -26,15 +27,21 @@ pub const CAPABILITIES: &[&str] = &[
     "account.import.v1",
     "project.read.v1",
     "project.register.v1",
+    "project.archive.v1",
     "launch.start.v1",
     "launch.read.v1",
     "recovery.scan.v1",
+    "recovery.incident.v1",
     "terminal.read.v1",
     "terminal.create.v1",
     "terminal.history.v1",
+    "terminal.close.v1",
+    "terminal.data.v1",
+    "thread.index.v1",
     "usage.probe.v1",
     "usage.read.v1",
     "usage.refresh.v1",
+    "usage.batch.v1",
     "diagnostics.export.v1",
 ];
 
@@ -102,24 +109,38 @@ pub enum ControlRequest {
     ProjectList,
     #[serde(rename = "project.register")]
     ProjectRegister { source_path: String, name: String, operation_id: String },
+    #[serde(rename = "project.archive")]
+    ProjectArchive { project_id: String, operation_id: String },
     #[serde(rename = "launch.start")]
     LaunchStart { account_id: String, project_id: String, operation_id: String },
     #[serde(rename = "launch.list")]
     LaunchList,
     #[serde(rename = "recovery.scan")]
     RecoveryScan { operation_id: String },
+    #[serde(rename = "recovery.incident.list")]
+    RecoveryIncidentList { include_resolved: bool },
+    #[serde(rename = "recovery.incident.resolve")]
+    RecoveryIncidentResolve { incident_id: String, action: String, operation_id: String },
     #[serde(rename = "terminal.list")]
     TerminalList { project_id: String },
     #[serde(rename = "terminal.create")]
     TerminalCreate { project_id: String, name: String, operation_id: String },
     #[serde(rename = "terminal.history")]
     TerminalHistory { terminal_id: String },
+    #[serde(rename = "terminal.close")]
+    TerminalClose { terminal_id: String, operation_id: String },
+    #[serde(rename = "thread.refresh")]
+    ThreadRefresh { project_id: String, operation_id: String },
+    #[serde(rename = "thread.list")]
+    ThreadList { project_id: String },
     #[serde(rename = "usage.probe")]
     UsageProbe { account_id: String },
     #[serde(rename = "usage.read")]
     UsageRead { account_id: String },
     #[serde(rename = "usage.refresh")]
     UsageRefresh { account_id: String, operation_id: String },
+    #[serde(rename = "usage.refresh_batch")]
+    UsageRefreshBatch { account_ids: Vec<String>, operation_id: String },
     #[serde(rename = "diagnostics.export")]
     DiagnosticsExport { operation_id: String },
 }
@@ -146,13 +167,118 @@ pub enum ControlResponse {
     Launch(LaunchView),
     Launches(Vec<LaunchView>),
     Recovery(Vec<RecoveryResult>),
+    RecoveryIncidents(Vec<RecoveryIncident>),
+    RecoveryIncident(RecoveryIncident),
     Terminals(Vec<Terminal>),
     Terminal(Terminal),
     TerminalHistory { terminal_id: String, bytes: Vec<u8>, truncated: bool },
+    Threads(Vec<ThreadIndex>),
     UsageProbe(CapabilityProbe),
     Usage(Option<UsageSnapshot>),
+    UsageBatch(Vec<UsageRefreshResult>),
     Diagnostics(DiagnosticReceipt),
     Acknowledged,
+}
+
+pub const TERMINAL_DATA_PROTOCOL_MAJOR: u16 = 1;
+pub const TERMINAL_DATA_PROTOCOL_MINOR: u16 = 0;
+pub const MAX_TERMINAL_DATA_MESSAGE_BYTES: usize = 128 * 1024;
+
+/// Formal, stdio terminal data-plane request. It carries no shell command,
+/// executable, path, tmux session name, window target, or pane target.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct TerminalDataRequestEnvelope {
+    pub id: u64,
+    pub request: TerminalDataRequest,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "method", content = "params")]
+pub enum TerminalDataRequest {
+    #[serde(rename = "terminal.handshake")]
+    Handshake { protocol_major: u16, protocol_minor: u16, client_name: String },
+    #[serde(rename = "terminal.attach")]
+    Attach { terminal_id: String },
+    #[serde(rename = "terminal.stream.start")]
+    StartStream { stream: TerminalStream },
+    #[serde(rename = "terminal.detach")]
+    Detach { stream: TerminalStream },
+    #[serde(rename = "terminal.switch")]
+    Switch { terminal_id: String },
+    #[serde(rename = "terminal.input")]
+    SendInput { stream: TerminalStream, bytes: Vec<u8> },
+    #[serde(rename = "terminal.resize")]
+    Resize { stream: TerminalStream, columns: u16, rows: u16 },
+    #[serde(rename = "terminal.close")]
+    Close { terminal_id: String },
+    #[serde(rename = "terminal.state")]
+    ReadState,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct TerminalStream {
+    pub connection_id: String,
+    pub attachment_id: u64,
+    pub bootstrap_id: u64,
+    pub project_id: String,
+    pub terminal_id: String,
+    pub window_id: String,
+    pub pane_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TerminalDataResponse {
+    Handshake {
+        protocol_major: u16,
+        protocol_minor: u16,
+        connection_id: String,
+        tmux_version: String,
+        max_message_bytes: usize,
+    },
+    Attached {
+        stream: TerminalStream,
+    },
+    StreamStarted {
+        stream: TerminalStream,
+    },
+    Detached,
+    State {
+        attached: Option<TerminalStream>,
+    },
+    Closed {
+        terminal_id: String,
+    },
+    Acknowledged,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct TerminalDataError {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TerminalDataEvent {
+    History { stream: TerminalStream, sequence: u64, bytes: Vec<u8> },
+    Output { stream: TerminalStream, sequence: u64, bytes: Vec<u8> },
+    StreamClosed { stream: TerminalStream, sequence: u64 },
+    StreamError { stream: TerminalStream, sequence: u64, code: String },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "frame", rename_all = "snake_case")]
+pub enum TerminalDataFrame {
+    Response { id: u64, result: TerminalDataResult },
+    Event { event: TerminalDataEvent },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum TerminalDataResult {
+    Ok { response: TerminalDataResponse },
+    Error { error: TerminalDataError },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]

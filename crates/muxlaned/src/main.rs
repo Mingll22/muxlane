@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod phase3;
+mod terminal_data;
 
 use std::{
     fs,
@@ -22,10 +23,10 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use muxlane_core::{
-    CoreError, credential, diagnostics,
+    CoreError, credential, diagnostics, incident,
     layout::{Layout, hex_sha256, validate_id},
     lock::ManagedLock,
-    recovery, service,
+    recovery, service, session,
     storage::{OperationClaim, Storage},
     terminal, usage,
 };
@@ -60,6 +61,8 @@ enum Command {
         #[arg(long)]
         transaction_id: String,
     },
+    /// Run one formal, bounded Terminal data-plane connection over stdio.
+    TerminalGateway,
     /// Retained compatibility surface for the explicitly non-production Phase 3 POC.
     Phase3 {
         #[command(subcommand)]
@@ -90,6 +93,7 @@ fn main() {
     let result = match DaemonCli::parse().command {
         Command::Serve => run_server(),
         Command::ManagedRunner { transaction_id } => run_managed_runner(&transaction_id),
+        Command::TerminalGateway => terminal_data::run_gateway(),
         Command::Phase3 { command: Phase3Command::Gateway { socket } } => {
             phase3::run_gateway(socket).map_err(|error| {
                 CoreError::new("INTERNAL_ERROR", format!("{}: {}", error.code, error.message))
@@ -319,6 +323,13 @@ fn dispatch(state: &ServerState, request: &ControlRequest) -> Result<ControlResp
                 Ok(ControlResponse::Project(project))
             },
         ),
+        ControlRequest::ProjectArchive { project_id, operation_id } => idempotent(
+            state,
+            operation_id,
+            "project.archive",
+            json!({"project_id":project_id}),
+            || Ok(ControlResponse::Project(service::archive_project(&state.storage, project_id)?)),
+        ),
         ControlRequest::LaunchStart { account_id, project_id, operation_id } => idempotent(
             state,
             operation_id,
@@ -357,6 +368,24 @@ fn dispatch(state: &ServerState, request: &ControlRequest) -> Result<ControlResp
                 Ok(ControlResponse::Recovery(recovery::recover_all(&state.storage)?))
             })
         }
+        ControlRequest::RecoveryIncidentList { include_resolved } => {
+            Ok(ControlResponse::RecoveryIncidents(state.storage.list_incidents(*include_resolved)?))
+        }
+        ControlRequest::RecoveryIncidentResolve { incident_id, action, operation_id } => {
+            idempotent(
+                state,
+                operation_id,
+                "recovery.incident.resolve",
+                json!({"incident_id":incident_id,"action":action}),
+                || {
+                    Ok(ControlResponse::RecoveryIncident(incident::resolve(
+                        &state.storage,
+                        incident_id,
+                        action,
+                    )?))
+                },
+            )
+        }
         ControlRequest::TerminalList { project_id } => {
             validate_id(project_id)?;
             Ok(ControlResponse::Terminals(state.storage.list_terminals(project_id)?))
@@ -382,6 +411,25 @@ fn dispatch(state: &ServerState, request: &ControlRequest) -> Result<ControlResp
                 truncated: false,
             })
         }
+        ControlRequest::TerminalClose { terminal_id, operation_id } => idempotent(
+            state,
+            operation_id,
+            "terminal.close",
+            json!({"terminal_id":terminal_id}),
+            || Ok(ControlResponse::Terminal(terminal::close(&state.storage, terminal_id)?)),
+        ),
+        ControlRequest::ThreadRefresh { project_id, operation_id } => idempotent(
+            state,
+            operation_id,
+            "thread.refresh",
+            json!({"project_id":project_id}),
+            || Ok(ControlResponse::Threads(session::refresh(&state.storage, project_id)?)),
+        ),
+        ControlRequest::ThreadList { project_id } => {
+            validate_id(project_id)?;
+            state.storage.project(project_id)?;
+            Ok(ControlResponse::Threads(state.storage.list_thread_indexes(project_id)?))
+        }
         ControlRequest::UsageProbe { account_id } => {
             Ok(ControlResponse::UsageProbe(usage::probe_capabilities(&state.storage, account_id)?))
         }
@@ -395,6 +443,13 @@ fn dispatch(state: &ServerState, request: &ControlRequest) -> Result<ControlResp
             "usage.refresh",
             json!({"account_id":account_id}),
             || Ok(ControlResponse::Usage(Some(usage::refresh_usage(&state.storage, account_id)?))),
+        ),
+        ControlRequest::UsageRefreshBatch { account_ids, operation_id } => idempotent(
+            state,
+            operation_id,
+            "usage.refresh_batch",
+            json!({"account_ids":account_ids}),
+            || Ok(ControlResponse::UsageBatch(usage::refresh_batch(&state.storage, account_ids)?)),
         ),
         ControlRequest::DiagnosticsExport { operation_id } => {
             idempotent(state, operation_id, "diagnostics.export", json!({}), || {

@@ -8,6 +8,20 @@ use crate::{
     storage::Storage,
 };
 
+fn fault_injection_pause_after_journal() {
+    if std::env::var_os("MUXLANE_TEST_MODE").as_deref() != Some(std::ffi::OsStr::new("1")) {
+        return;
+    }
+    let milliseconds = std::env::var("MUXLANE_RECOVERY_TEST_PAUSE_AFTER_JOURNAL_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0)
+        .min(30_000);
+    if milliseconds > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(milliseconds));
+    }
+}
+
 pub fn recover_all(storage: &Storage) -> CoreResult<Vec<RecoveryResult>> {
     let current_boot = boot_id()?;
     storage
@@ -41,6 +55,8 @@ pub fn recover_transaction(
         }
         Err(error) => return Err(error),
     };
+    let recovery_run = storage.begin_recovery_run(&transaction.transaction_id)?;
+    fault_injection_pause_after_journal();
 
     if transaction.state == TransactionState::Running
         && (matches_recorded(transaction, true, current_boot)?
@@ -57,6 +73,12 @@ pub fn recover_transaction(
         storage.record_recovery_attempt(
             &incident,
             &transaction.transaction_id,
+            "process_without_lock",
+            TransactionState::Failed,
+            Some("PROCESS_IDENTITY_UNCONFIRMED"),
+        )?;
+        storage.complete_recovery_run(
+            &recovery_run,
             "process_without_lock",
             TransactionState::Failed,
             Some("PROCESS_IDENTITY_UNCONFIRMED"),
@@ -84,6 +106,12 @@ pub fn recover_transaction(
                     storage.record_recovery_attempt(
                         &incident,
                         &transaction.transaction_id,
+                        "checkout_ambiguous",
+                        TransactionState::Failed,
+                        Some(error.code),
+                    )?;
+                    storage.complete_recovery_run(
+                        &recovery_run,
                         "checkout_ambiguous",
                         TransactionState::Failed,
                         Some(error.code),
@@ -130,6 +158,7 @@ pub fn recover_transaction(
     } else {
         None
     };
+    storage.complete_recovery_run(&recovery_run, classification, final_transaction.state, None)?;
     Ok(RecoveryResult {
         transaction_id: transaction.transaction_id.clone(),
         previous_state,

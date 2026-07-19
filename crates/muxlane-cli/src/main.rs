@@ -51,6 +51,14 @@ enum TopLevel {
         #[command(subcommand)]
         command: TerminalCommand,
     },
+    Thread {
+        #[command(subcommand)]
+        command: ThreadCommand,
+    },
+    Incident {
+        #[command(subcommand)]
+        command: IncidentCommand,
+    },
     Usage {
         #[command(subcommand)]
         command: UsageCommand,
@@ -72,6 +80,7 @@ enum DaemonCommand {
 enum ProjectCommand {
     List,
     Register { path: PathBuf, name: String },
+    Archive { project_id: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -91,6 +100,25 @@ enum TerminalCommand {
     List { project_id: String },
     Create { project_id: String, name: String },
     History { terminal_id: String },
+    Close { terminal_id: String },
+}
+
+#[derive(Debug, Subcommand)]
+enum ThreadCommand {
+    List { project_id: String },
+    Refresh { project_id: String },
+}
+
+#[derive(Debug, Subcommand)]
+enum IncidentCommand {
+    List {
+        #[arg(long)]
+        include_resolved: bool,
+    },
+    Resolve {
+        incident_id: String,
+        action: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -98,6 +126,7 @@ enum UsageCommand {
     Probe { account_id: String },
     Read { account_id: String },
     Refresh { account_id: String },
+    RefreshBatch { account_ids: Vec<String> },
 }
 
 #[derive(Debug, Subcommand)]
@@ -131,6 +160,9 @@ fn run(cli: Cli) -> Result<(), String> {
                 operation_id: operation_id(),
             }
         }
+        TopLevel::Project { command: ProjectCommand::Archive { project_id } } => {
+            ControlRequest::ProjectArchive { project_id, operation_id: operation_id() }
+        }
         TopLevel::Account { command: AccountCommand::List } => ControlRequest::AccountList,
         TopLevel::Account { command: AccountCommand::Import { auth_json, name } } => {
             ControlRequest::AccountImport {
@@ -152,6 +184,25 @@ fn run(cli: Cli) -> Result<(), String> {
         TopLevel::Terminal { command: TerminalCommand::History { terminal_id } } => {
             ControlRequest::TerminalHistory { terminal_id }
         }
+        TopLevel::Terminal { command: TerminalCommand::Close { terminal_id } } => {
+            ControlRequest::TerminalClose { terminal_id, operation_id: operation_id() }
+        }
+        TopLevel::Thread { command: ThreadCommand::List { project_id } } => {
+            ControlRequest::ThreadList { project_id }
+        }
+        TopLevel::Thread { command: ThreadCommand::Refresh { project_id } } => {
+            ControlRequest::ThreadRefresh { project_id, operation_id: operation_id() }
+        }
+        TopLevel::Incident { command: IncidentCommand::List { include_resolved } } => {
+            ControlRequest::RecoveryIncidentList { include_resolved }
+        }
+        TopLevel::Incident { command: IncidentCommand::Resolve { incident_id, action } } => {
+            ControlRequest::RecoveryIncidentResolve {
+                incident_id,
+                action,
+                operation_id: operation_id(),
+            }
+        }
         TopLevel::Usage { command: UsageCommand::Probe { account_id } } => {
             ControlRequest::UsageProbe { account_id }
         }
@@ -160,6 +211,9 @@ fn run(cli: Cli) -> Result<(), String> {
         }
         TopLevel::Usage { command: UsageCommand::Refresh { account_id } } => {
             ControlRequest::UsageRefresh { account_id, operation_id: operation_id() }
+        }
+        TopLevel::Usage { command: UsageCommand::RefreshBatch { account_ids } } => {
+            ControlRequest::UsageRefreshBatch { account_ids, operation_id: operation_id() }
         }
         TopLevel::Recover => ControlRequest::RecoveryScan { operation_id: operation_id() },
         TopLevel::Diagnostics { command: DiagnosticsCommand::Export } => {

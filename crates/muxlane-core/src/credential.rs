@@ -20,6 +20,20 @@ pub enum CredentialDisposition {
     Conflict,
 }
 
+fn fault_injection_pause(name: &str) {
+    if std::env::var_os("MUXLANE_TEST_MODE").as_deref() != Some(std::ffi::OsStr::new("1")) {
+        return;
+    }
+    let milliseconds = std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0)
+        .min(30_000);
+    if milliseconds > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(milliseconds));
+    }
+}
+
 pub fn import_account(storage: &Storage, source: &Path, display_name: &str) -> CoreResult<Account> {
     if display_name.trim().is_empty()
         || display_name.len() > 120
@@ -71,6 +85,7 @@ pub fn checkout(storage: &Storage, transaction_id: &str) -> CoreResult<()> {
     if runtime_hash != vault_hash {
         return Err(CoreError::new("STORAGE_FAILURE", "credential checkout verification failed"));
     }
+    fault_injection_pause("MUXLANE_CHECKOUT_TEST_PAUSE_AFTER_COPY_MS");
     storage.record_checkout(transaction_id, &vault_hash, &runtime_hash)
 }
 
@@ -155,6 +170,7 @@ fn commit_from_hash_matrix(
         if file_hash(&vault_path)? != runtime_hash {
             return Err(CoreError::new("STORAGE_FAILURE", "credential commit verification failed"));
         }
+        fault_injection_pause("MUXLANE_COMMIT_TEST_PAUSE_AFTER_VAULT_MS");
         CredentialDisposition::RuntimeCommitted
     } else {
         let evidence =

@@ -51,6 +51,7 @@ pub fn register_project(storage: &Storage, source: &Path, name: &str) -> CoreRes
         runtime_relative_path,
         tmux_session_name,
         active: false,
+        archived_at: None,
         created_at: timestamp,
         updated_at: timestamp,
     };
@@ -211,6 +212,29 @@ pub fn resolve_executable_for_runner() -> CoreResult<PathBuf> {
         return Err(CoreError::new("PATH_REJECTED", "daemon executable path is not absolute"));
     }
     Ok(executable)
+}
+
+pub fn archive_project(storage: &Storage, project_id: &str) -> CoreResult<Project> {
+    validate_id(project_id)?;
+    let project = storage.project_including_archived(project_id)?;
+    if project.archived_at.is_some() {
+        return Ok(project);
+    }
+    let _lock = crate::lock::ManagedLock::try_acquire(
+        &storage.layout().project_lock(project_id)?,
+        "PROJECT_IN_USE",
+    )?;
+    if project.active
+        || storage.has_open_incident(project_id)?
+        || credential::runtime_auth_exists(storage.layout(), project_id)?
+        || crate::terminal::managed_session_exists(storage, project_id)?
+    {
+        return Err(CoreError::new(
+            "INVALID_STATE",
+            "project has active Runtime state or unresolved recovery evidence",
+        ));
+    }
+    storage.archive_project(project_id)
 }
 
 #[cfg(test)]

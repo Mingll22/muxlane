@@ -99,8 +99,49 @@ pub struct Project {
     pub runtime_relative_path: String,
     pub tmux_session_name: String,
     pub active: bool,
+    pub archived_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct RecoveryIncident {
+    pub incident_id: String,
+    pub transaction_id: String,
+    pub project_id: String,
+    pub account_id: String,
+    pub kind: String,
+    pub status: String,
+    pub evidence_relative_path: Option<String>,
+    pub resolution_action: Option<String>,
+    pub resolution_summary: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub resolved_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct RecoveryAttempt {
+    pub attempt_id: String,
+    pub incident_id: String,
+    pub transaction_id: String,
+    pub action: String,
+    pub classification: String,
+    pub result_state: String,
+    pub error_code: Option<String>,
+    pub created_at: i64,
+    pub completed_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ThreadIndex {
+    pub thread_id: String,
+    pub project_id: String,
+    pub source_relative_path: String,
+    pub source_modified_at: i64,
+    pub codex_version: Option<String>,
+    pub status: String,
+    pub indexed_at: i64,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -193,6 +234,13 @@ pub struct UsageWindow {
     pub duration_minutes: Option<u64>,
     pub used_percent: Option<u64>,
     pub resets_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct UsageRefreshResult {
+    pub account_id: String,
+    pub snapshot: Option<UsageSnapshot>,
+    pub error_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]

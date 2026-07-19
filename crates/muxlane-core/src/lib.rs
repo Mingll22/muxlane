@@ -6,12 +6,14 @@
 pub mod credential;
 pub mod diagnostics;
 pub mod error;
+pub mod incident;
 pub mod layout;
 pub mod lock;
 pub mod model;
 pub mod process;
 pub mod recovery;
 pub mod service;
+pub mod session;
 pub mod storage;
 pub mod terminal;
 pub mod usage;
