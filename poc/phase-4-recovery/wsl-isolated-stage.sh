@@ -24,6 +24,10 @@ wait_for_socket() {
   exit 70
 }
 
+sql() {
+  sqlite3 -cmd '.timeout 5000' "$test_root/muxlane.db" "$1"
+}
+
 case "$command_name" in
   prepare)
     install -d -m 0700 "$test_root"
@@ -37,7 +41,7 @@ case "$command_name" in
     project_id=$(muxlane project register "$project_source" TerminateProject | jq -r .result.data.project_id)
     muxlane launch start "$account_id" "$project_id" >/dev/null
     for _ in $(seq 1 200); do
-      state=$(sqlite3 "$test_root/muxlane.db" 'select state from launch_transactions order by created_at desc limit 1')
+      state=$(sql 'select state from launch_transactions order by created_at desc limit 1')
       [[ "$state" == running ]] && break
       sleep 0.05
     done
@@ -55,7 +59,7 @@ case "$command_name" in
     daemon_pid=$!
     printf '%s\n' "$daemon_pid" >"$test_root/recovery-daemon.pid"
     for _ in $(seq 1 300); do
-      running=$(sqlite3 "$test_root/muxlane.db" "select count(*) from recovery_runs where status='running'")
+      running=$(sql "select count(*) from recovery_runs where status='running'")
       [[ "$running" -gt 0 ]] && break
       sleep 0.05
     done
@@ -78,20 +82,20 @@ case "$command_name" in
     wait_for_socket
     account_id=$(cat "$test_root/account.id")
     project_id=$(cat "$test_root/project.id")
-    state=$(sqlite3 "$test_root/muxlane.db" 'select state from launch_transactions order by created_at asc limit 1')
+    state=$(sql 'select state from launch_transactions order by created_at asc limit 1')
     repeated=$(muxlane recover | jq '.result.data | length')
-    incomplete=$(sqlite3 "$test_root/muxlane.db" "select count(*) from recovery_runs where status='running'")
-    completed=$(sqlite3 "$test_root/muxlane.db" "select count(*) from recovery_runs where status='completed'")
+    incomplete=$(sql "select count(*) from recovery_runs where status='running'")
+    completed=$(sql "select count(*) from recovery_runs where status='completed'")
     runtime_auth=absent
     [[ -e "$test_root/projects/$project_id/codex-home/auth.json" ]] && runtime_auth=present
     vault_hash=$(sha256sum "$test_root/accounts/$account_id/auth.json" | cut -d' ' -f1)
     vault_stable=no
     [[ "$vault_hash" == "$(cat "$test_root/vault-before.sha256")" ]] && vault_stable=yes
-    open_incidents=$(sqlite3 "$test_root/muxlane.db" "select count(*) from recovery_incidents where status='open'")
-    first_transaction=$(sqlite3 "$test_root/muxlane.db" 'select transaction_id from launch_transactions order by created_at asc limit 1')
+    open_incidents=$(sql "select count(*) from recovery_incidents where status='open'")
+    first_transaction=$(sql 'select transaction_id from launch_transactions order by created_at asc limit 1')
     muxlane launch start "$account_id" "$project_id" >/dev/null
     for _ in $(seq 1 200); do
-      latest=$(sqlite3 "$test_root/muxlane.db" 'select state from launch_transactions order by created_at desc limit 1')
+      latest=$(sql 'select state from launch_transactions order by created_at desc limit 1')
       [[ "$latest" == finished ]] && break
       sleep 0.05
     done
