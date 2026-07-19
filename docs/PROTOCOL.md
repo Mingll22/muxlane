@@ -4,13 +4,13 @@
 
 | 项目     | 内容                                                                                                |
 | -------- | --------------------------------------------------------------------------------------------------- |
-| 状态     | Frozen（阶段 1）                                                                                    |
-| 逻辑版本 | Protocol v1 Candidate（`1.0`）；仅 MVP 列为候选合同，Future 项只保留命名空间                        |
-| 已实现性 | 未实现；本文件不是 Server、Client 或传输实现规范                                                    |
-| 传输状态 | 尚未通过阶段 3 Windows—WSL 传输 POC；具体桥接不是当前稳定合同                                       |
+| 状态     | Frozen baseline + implemented Protocol `1.0`                                                        |
+| 逻辑版本 | Protocol `1.0`；能力通过 handshake negotiation                                                      |
+| 已实现性 | Phase 5 control/Terminal plane 与 Phase 6/7 typed extension 已实现                                  |
+| 传输状态 | WSL Unix Socket + 固定 Windows `wsl.exe` control/Terminal 子进程桥接已验证                          |
 | 上游边界 | Codex App Server 协议不等于 Muxlane 内部协议；其 Schema、字段和命令均须以官方资料或无副作用探测验证 |
 
-本文件冻结 GUI、Tauri Host、`muxlaned` 与 `muxlane` CLI 之间的**逻辑控制协议设计**，而不是已实现的稳定 wire contract。它补充 [总体架构](ARCHITECTURE.md)、[Runtime 生命周期](RUNTIME_LIFECYCLE.md) 与 [恢复状态机](RECOVERY_STATE_MACHINE.md)，但不替代它们的锁、凭证或恢复不变量；后续 POC 若推翻本设计，必须通过新的 ADR 修订。
+本文件保留阶段 1 的逻辑设计，并记录当前 Protocol 1.0 实现边界。Rust `muxlane-protocol` crate 是 wire DTO 与 capability 的代码级真相；本文补充 [总体架构](ARCHITECTURE.md)、[Runtime 生命周期](RUNTIME_LIFECYCLE.md) 与 [恢复状态机](RECOVERY_STATE_MACHINE.md)，但不替代锁、凭证或恢复不变量。
 
 未通过 POC、未被当前上游 Schema 证明的项目必须标作 **Candidate**、**Capability-probed**、**POC validation required** 或 **Not part of the stable contract**。阶段 1C 不实现任何 RPC、Socket、Bridge 或终端通道。
 
@@ -20,7 +20,7 @@
 | ------------------------ | ----------------------------------------------- | ------------------------------------------------------- |
 | Windows React WebView    | 显示与用户意图；只能经 Tauri 白名单请求控制操作 | 不能读取 Vault、tmux Socket 或任意文件/命令             |
 | Tauri Host               | Windows 侧受限 Host 与 ACL 执行点               | 只能调用已允许的 Daemon 方法；不能把 WebView 变成 Shell |
-| Windows—WSL Local Bridge | 候选本机桥接层                                  | 具体进程、管道、端口和身份绑定待阶段 3 POC              |
+| Windows—WSL Local Bridge | 固定本机子进程桥接                              | 只调用 typed `muxlane control` 与 Terminal Gateway      |
 | `muxlaned`               | WSL Control Plane、授权、状态协调与事件发布者   | 唯一协调 Vault、Runtime、锁、事务和 tmux 的受管方       |
 | `muxlane` CLI            | 当前 WSL 用户的 CLI 客户端和诊断入口            | 通过本地授权连接读取或发起受限操作                      |
 | Terminal Gateway         | 终端控制与数据流边界                            | 不把 PTY 高频字节流伪装为普通控制事件                   |
@@ -54,7 +54,7 @@ flowchart LR
 
 - 仅允许本地传输；Muxlane 不监听 LAN，也不把控制面公开为远程服务。
 - WSL 内优先使用仅当前 Linux 用户可访问的 Unix Domain Socket。Socket 目录、所有者和模式是实现时的安全检查项。
-- Windows—WSL 最终桥接方式、命名管道名称、TCP 端口、桥接可执行文件和帧格式均为 **POC validation required**，不属于稳定合同。
+- Windows—WSL bridge 只启动固定 `wsl.exe --exec /usr/bin/env muxlane|muxlaned`，不接受 WebView 指定 executable、Shell、tmux target 或网络目标。
 - 传输层断开不等于 Launch、`tmux`、Runner 或 Codex 退出；连接丢失不得自动释放 Account/Project 锁。
 - 每一次连接或重连都必须重新握手并完成 local-peer validation；先前 session 不能凭客户端缓存续用。
 - WebView 绝不能直接连接 Account Vault、tmux Socket、Daemon Socket 或任意 Shell。
@@ -172,7 +172,7 @@ stateDiagram-v2
 | `usage.read_refresh_status`     | 读取刷新状态；Host、CLI                 | AccountRef or Operation → UsageRefreshStatus                            | 只读                                                         | `usage.read.v1`; `NOT_FOUND`                                                                            | 6；否                             |
 | `diagnostics.export`            | 用户主动导出诊断包；CLI、Host           | ExportIntent + Operation → ExportReceipt                                | 去重；生成受控、脱敏包                                       | `diagnostics.export.v1`; `PERMISSION_DENIED`, `STORAGE_FAILURE`                                         | 5/8；脱敏 POC                     |
 
-除 `account.remove_eligibility` 外，本表其余 38 个方法均是 Protocol v1 MVP Candidate，目标在阶段 5 或 6 实现；标注 `3/5` 或 `4/5` 的方法只把阶段 3/4 作为 POC 前置条件，不在 POC 前冻结传输或字段。`account.remove_eligibility`、`assets.*` 与 `files.*` 是阶段 7 Future Candidate：仅保留命名空间/意图，不属于 Protocol v1 MVP 稳定合同，也不授权任意文件访问。
+Phase 5/6 已实现表中对应的核心 Account、Project、Launch、Recovery、Terminal、Thread、Usage 与 diagnostics 能力。Phase 7 通过 typed `workbench.settings.*`、`workbench.template.*`、`workbench.preset.*`、`workbench.history.*` 与 `workspace.list/search/preview/location` 扩展 Protocol 1.0；workspace 方法只允许 daemon 在 canonical Project root 下执行只读解析。`account.remove_eligibility`、`assets.*`、Skills/MCP/Plugins 和任意文件写入仍不属于当前稳定合同。
 
 ## 9. 幂等、操作键与重放
 
