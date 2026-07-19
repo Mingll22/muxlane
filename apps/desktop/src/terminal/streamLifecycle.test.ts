@@ -74,4 +74,19 @@ describe('terminal stream lifecycle', () => {
       }).kind,
     ).toBe('gap');
   });
+
+  it('closes only the stream owned by a disconnected gateway', () => {
+    expect(
+      classifyStreamEvent(beginStream(stream), {
+        kind: 'connection_closed',
+        connection_id: stream.connection_id,
+      }).kind,
+    ).toBe('closed');
+    expect(
+      classifyStreamEvent(beginStream(stream), {
+        kind: 'connection_closed',
+        connection_id: 'connection-b',
+      }).kind,
+    ).toBe('stale');
+  });
 });

@@ -402,6 +402,63 @@ fn isolates_two_projects_two_windows_input_resize_unicode_and_ctrl_c() {
 }
 
 #[test]
+fn cleans_the_control_client_when_bootstrap_fails() {
+    let mut gateway = GatewayHarness::start("bootstrap-cleanup");
+    gateway
+        .request(Phase3Request::CreateSyntheticSession { project_id: "project-a".to_owned() })
+        .expect("creates the cleanup session");
+    let window_id = windows(
+        gateway
+            .request(Phase3Request::ListWindows { project_id: "project-a".to_owned() })
+            .expect("lists the cleanup window"),
+    )[0]
+    .id
+    .clone();
+    let socket = gateway.socket.clone();
+    let target = format!("mlp3-project-a:{window_id}");
+    let mut external = Command::new("tmux")
+        .args(["-L", &socket, "-C", "attach-session", "-t", &target])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("starts a competing Control Mode client");
+    let _external_stdin = external.stdin.take().expect("retains the competing client stdin");
+
+    let client_count = || {
+        let output = Command::new("tmux")
+            .args(["-L", &socket, "list-clients", "-F", "#{client_name}"])
+            .output()
+            .expect("lists Control Mode clients");
+        String::from_utf8_lossy(&output.stdout).lines().count()
+    };
+    let deadline = Instant::now() + EVENT_TIMEOUT;
+    while client_count() != 1 && Instant::now() < deadline {
+        thread::yield_now();
+    }
+    assert_eq!(client_count(), 1);
+
+    assert_eq!(
+        gateway.request(Phase3Request::Attach {
+            project_id: "project-a".to_owned(),
+            window_id: window_id.clone(),
+        }),
+        Err("conflict".to_owned())
+    );
+    assert_eq!(client_count(), 1, "the failed bootstrap client must be reaped");
+
+    external.kill().expect("stops the competing Control Mode client");
+    external.wait().expect("reaps the competing Control Mode client");
+    let deadline = Instant::now() + EVENT_TIMEOUT;
+    while client_count() != 0 && Instant::now() < deadline {
+        thread::yield_now();
+    }
+    assert_eq!(client_count(), 0);
+    let stream = gateway.attach_and_start("project-a", &window_id);
+    assert_eq!(stream.window_id, window_id);
+}
+
+#[test]
 fn rejects_invalid_targets_dimensions_and_input_bounds() {
     let mut gateway = GatewayHarness::start("validation");
     assert_eq!(

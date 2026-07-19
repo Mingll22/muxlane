@@ -100,6 +100,13 @@ export function TerminalPoc({ stream, onFrame, onError, onStreamInvalidated }: T
         if (decision.kind === 'stale') {
           return;
         }
+        if (decision.kind === 'closed') {
+          readyRef.current = false;
+          cursorRef.current = null;
+          callbacksRef.current.onError('终端连接已关闭');
+          callbacksRef.current.onStreamInvalidated(cursor.stream);
+          return;
+        }
         if (decision.kind === 'gap') {
           readyRef.current = false;
           cursorRef.current = null;

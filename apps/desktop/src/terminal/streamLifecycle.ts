@@ -8,6 +8,7 @@ export type StreamCursor = {
 export type StreamDecision =
   | { kind: 'accept'; cursor: StreamCursor }
   | { kind: 'stale' }
+  | { kind: 'closed' }
   | { kind: 'gap'; expected: number; received: number };
 
 export function sameStream(left: AttachedTerminal, right: AttachedTerminal): boolean {
@@ -28,7 +29,7 @@ export function beginStream(stream: AttachedTerminal): StreamCursor {
 export function classifyStreamEvent(cursor: StreamCursor, event: TerminalEvent): StreamDecision {
   if (event.kind === 'connection_closed') {
     return event.connection_id === cursor.stream.connection_id
-      ? { kind: 'gap', expected: cursor.nextSequence, received: cursor.nextSequence }
+      ? { kind: 'closed' }
       : { kind: 'stale' };
   }
   if (!sameStream(cursor.stream, event.stream)) {

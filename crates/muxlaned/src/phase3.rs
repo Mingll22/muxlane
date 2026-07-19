@@ -74,6 +74,33 @@ struct Attachment {
     _child: Child,
 }
 
+struct ChildCleanupGuard {
+    child: Option<Child>,
+}
+
+impl ChildCleanupGuard {
+    fn new(child: Child) -> Self {
+        Self { child: Some(child) }
+    }
+
+    fn child_mut(&mut self) -> Result<&mut Child, Phase3Error> {
+        self.child.as_mut().ok_or_else(|| internal_error("Control Mode child guard is empty"))
+    }
+
+    fn disarm(mut self) -> Result<Child, Phase3Error> {
+        self.child.take().ok_or_else(|| internal_error("Control Mode child guard is empty"))
+    }
+}
+
+impl Drop for ChildCleanupGuard {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 impl Gateway {
     pub fn new(socket: String) -> Result<Self, Phase3Error> {
         validate_socket(&socket)?;
@@ -296,17 +323,24 @@ impl Gateway {
         let target = self.target_for(&project_id, &window_id)?;
         let pane_id = self.pane_for_target(&target)?;
 
-        let mut child = Command::new("tmux")
+        let child = Command::new("tmux")
             .args(["-L", &self.socket, "-C", "attach-session", "-t", &target])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .map_err(|_| unavailable_error("cannot start tmux Control Mode"))?;
-        let control_stdin =
-            child.stdin.take().ok_or_else(|| internal_error("Control Mode stdin unavailable"))?;
-        let control_stdout =
-            child.stdout.take().ok_or_else(|| internal_error("Control Mode stdout unavailable"))?;
+        let mut child = ChildCleanupGuard::new(child);
+        let control_stdin = child
+            .child_mut()?
+            .stdin
+            .take()
+            .ok_or_else(|| internal_error("Control Mode stdin unavailable"))?;
+        let control_stdout = child
+            .child_mut()?
+            .stdout
+            .take()
+            .ok_or_else(|| internal_error("Control Mode stdout unavailable"))?;
         let control_stdin = Arc::new(Mutex::new(control_stdin));
         let intentionally_detached = Arc::new(AtomicBool::new(false));
         let output_overflowed = Arc::new(AtomicU8::new(OVERFLOW_NONE));
@@ -318,8 +352,6 @@ impl Gateway {
 
         wait_for_command_block(&control_lines)?;
         if self.control_client_count()? != 1 {
-            let _ = child.kill();
-            let _ = child.wait();
             return Err(conflict_error("managed pane already has another tmux client"));
         }
         write_control_command(&control_stdin, &format!("refresh-client -A '{pane_id}:off'"))?;
@@ -373,7 +405,7 @@ impl Gateway {
             bootstrap_expired,
             output_overflowed,
             intentionally_detached,
-            _child: child,
+            _child: child.disarm()?,
         });
         Ok(())
     }

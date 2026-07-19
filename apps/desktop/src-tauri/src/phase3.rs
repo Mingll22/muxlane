@@ -17,8 +17,8 @@ use std::{
 };
 
 use muxlane_protocol::{
-    AttachedTerminal, ManagedSession, ManagedWindow, Phase3Error, Phase3Frame, Phase3Request,
-    Phase3RequestEnvelope, Phase3Response, ResultFrame,
+    AttachedTerminal, ManagedSession, ManagedWindow, Phase3Error, Phase3Event, Phase3Frame,
+    Phase3Request, Phase3RequestEnvelope, Phase3Response, ResultFrame,
 };
 use tauri::{AppHandle, Emitter, State};
 
@@ -62,7 +62,8 @@ impl Phase3Bridge {
             child.stdout.take().ok_or_else(|| bridge_error("WSL gateway stdout unavailable"))?;
         let pending = Arc::new(Mutex::new(HashMap::new()));
         let alive = Arc::new(AtomicBool::new(true));
-        forward_frames(app, stdout, Arc::clone(&pending), Arc::clone(&alive));
+        let connection_id = Arc::new(Mutex::new(None));
+        forward_frames(app, stdout, Arc::clone(&pending), Arc::clone(&alive), connection_id);
         Ok(Self {
             stdin: Mutex::new(stdin),
             child: Mutex::new(child),
@@ -152,6 +153,7 @@ fn forward_frames(
     stdout: impl std::io::Read + Send + 'static,
     pending: Pending,
     alive: Arc<AtomicBool>,
+    connection_id: Arc<Mutex<Option<String>>>,
 ) {
     std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
@@ -160,6 +162,12 @@ fn forward_frames(
             };
             match frame {
                 Phase3Frame::Response { id, result } => {
+                    if let ResultFrame::Ok { response } = &result
+                        && let Some(next_connection_id) = response_connection_id(response)
+                        && let Ok(mut connection_id) = connection_id.lock()
+                    {
+                        *connection_id = Some(next_connection_id.to_owned());
+                    }
                     if let Ok(mut pending) = pending.lock()
                         && let Some(sender) = pending.remove(&id)
                     {
@@ -176,12 +184,35 @@ fn forward_frames(
             }
         }
         alive.store(false, Ordering::Release);
+        if let Ok(connection_id) = connection_id.lock()
+            && let Some(connection_id) = connection_id.as_ref()
+        {
+            let _ = app.emit(
+                EVENT_NAME,
+                Phase3Event::ConnectionClosed { connection_id: connection_id.clone() },
+            );
+        }
         if let Ok(mut pending) = pending.lock() {
             for (_, sender) in pending.drain() {
                 let _ = sender.send(Err(bridge_error("WSL terminal gateway disconnected")));
             }
         }
     });
+}
+
+fn response_connection_id(response: &Phase3Response) -> Option<&str> {
+    match response {
+        Phase3Response::Probe { connection_id, .. } => Some(connection_id),
+        Phase3Response::Attached { stream } | Phase3Response::StreamStarted { stream } => {
+            Some(&stream.connection_id)
+        }
+        Phase3Response::State { attached: Some(stream) } => Some(&stream.connection_id),
+        Phase3Response::Sessions { .. }
+        | Phase3Response::Windows { .. }
+        | Phase3Response::Detached
+        | Phase3Response::State { attached: None }
+        | Phase3Response::Acknowledged => None,
+    }
 }
 
 #[tauri::command]
@@ -329,7 +360,11 @@ fn display_error(error: Phase3Error) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{BRIDGE_SOCKET, EVENT_NAME, GATEWAY_EXECUTABLE, MAX_PENDING_REQUESTS, WSL_ENV};
+    use super::{
+        BRIDGE_SOCKET, EVENT_NAME, GATEWAY_EXECUTABLE, MAX_PENDING_REQUESTS, WSL_ENV,
+        response_connection_id,
+    };
+    use muxlane_protocol::{AttachedTerminal, Phase3Response};
 
     #[test]
     fn bridge_contract_is_fixed_and_bounded() {
@@ -338,5 +373,29 @@ mod tests {
         assert_eq!(GATEWAY_EXECUTABLE, "muxlaned");
         assert_eq!(EVENT_NAME, "phase3-terminal-frame");
         assert_eq!(MAX_PENDING_REQUESTS, 32);
+    }
+
+    #[test]
+    fn tracks_the_gateway_identity_for_disconnect_events() {
+        assert_eq!(
+            response_connection_id(&Phase3Response::Probe {
+                connection_id: "connection-a".to_owned(),
+                tmux_version: "tmux 3.4".to_owned(),
+            }),
+            Some("connection-a")
+        );
+        let stream = AttachedTerminal {
+            connection_id: "connection-b".to_owned(),
+            attachment_id: 1,
+            bootstrap_id: 1,
+            project_id: "project-a".to_owned(),
+            window_id: "@1".to_owned(),
+            pane_id: "%1".to_owned(),
+        };
+        assert_eq!(
+            response_connection_id(&Phase3Response::Attached { stream }),
+            Some("connection-b")
+        );
+        assert_eq!(response_connection_id(&Phase3Response::Acknowledged), None);
     }
 }
