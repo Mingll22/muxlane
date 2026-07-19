@@ -1,3 +1,4 @@
+#![cfg(target_os = "linux")]
 #![forbid(unsafe_code)]
 
 use std::{
