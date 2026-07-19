@@ -5,3 +5,4 @@ apps/desktop/dist/
 pnpm-lock.yaml
 Cargo.lock
 LICENSE
+*.ps1

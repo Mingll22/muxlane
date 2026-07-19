@@ -74,6 +74,7 @@ try {
     $project = (Invoke-Cli @("project", "register", $projectSource, "WindowsProject")).result.data.project_id
     Invoke-Cli @("launch", "start", $account, $project) | Out-Null
     $terminal = (Invoke-Cli @("terminal", "create", $project, "WindowsAux")).result.data
+    $terminal2 = (Invoke-Cli @("terminal", "create", $project, "WindowsAuxTwo")).result.data
 
     $events = [System.Collections.Generic.List[object]]::new()
     $gateway = Start-Gateway
@@ -104,8 +105,14 @@ try {
         if ($event.kind -eq "history") { $historyText += [System.Text.Encoding]::UTF8.GetString([byte[]]$event.bytes) }
     }
     if (-not $historyText.Contains("WINDOWS_FORMAL_LIVE")) { throw "reconnect history did not contain prior output" }
-    Send-Frame $gateway2 4 @{ method = "terminal.close"; params = @{ terminal_id = $terminal.terminal_id } }
-    Read-Response $gateway2 4 $events2 | Out-Null
+    Send-Frame $gateway2 4 @{ method = "terminal.switch"; params = @{ terminal_id = $terminal2.terminal_id } }
+    $switched = (Read-Response $gateway2 4 $events2).stream
+    Send-Frame $gateway2 5 @{ method = "terminal.stream.start"; params = @{ stream = $switched } }
+    Read-Response $gateway2 5 $events2 | Out-Null
+    Send-Frame $gateway2 6 @{ method = "terminal.close"; params = @{ terminal_id = $terminal.terminal_id } }
+    Read-Response $gateway2 6 $events2 | Out-Null
+    Send-Frame $gateway2 7 @{ method = "terminal.close"; params = @{ terminal_id = $terminal2.terminal_id } }
+    Read-Response $gateway2 7 $events2 | Out-Null
     $gateway2.StandardInput.Close(); $gateway2.WaitForExit(5000) | Out-Null
 
     $session = "muxlane-" + $project.Substring(8, 24)

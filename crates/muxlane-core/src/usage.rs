@@ -441,4 +441,34 @@ done
         assert_eq!(snapshot.lifetime_tokens, Some(44));
         assert_eq!(snapshot.login_status, "authenticated");
     }
+
+    #[test]
+    fn global_query_permits_bound_parallel_usage_work() {
+        use std::sync::{
+            Arc, Barrier,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let barrier = Arc::new(Barrier::new(9));
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let mut workers = Vec::new();
+        for _ in 0..8 {
+            let barrier = Arc::clone(&barrier);
+            let active = Arc::clone(&active);
+            let maximum = Arc::clone(&maximum);
+            workers.push(thread::spawn(move || {
+                barrier.wait();
+                let _permit = QueryPermit::acquire().unwrap();
+                let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                maximum.fetch_max(current, Ordering::SeqCst);
+                thread::sleep(Duration::from_millis(25));
+                active.fetch_sub(1, Ordering::SeqCst);
+            }));
+        }
+        barrier.wait();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(maximum.load(Ordering::SeqCst), MAX_CONCURRENT_USAGE_QUERIES);
+    }
 }
