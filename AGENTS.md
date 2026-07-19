@@ -2,7 +2,7 @@
 
 ## 定位与阶段
 
-Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。阶段 1 的需求与架构已冻结，阶段 2/3 POC 已完成；Phase 4 Crash Recovery 与 Phase 5 Core Backend 的正式实现和本地 Windows/WSL 验收已完成，是否合并仍以当前 PR review/CI 为准。阶段 2/3 synthetic Gateway 只保留为隔离兼容测试面，正式产品路径使用 Protocol 1.0 control plane 与独立 Terminal data plane。Phase 4/5 合并和 main CI 关闭前不得进入 Phase 6；不得提前进入 Phase 7～8。
+Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。阶段 1 的需求与架构已冻结，阶段 2/3 POC 已完成；Phase 4 Crash Recovery 与 Phase 5 Core Backend 已在 PR #12 合并并通过合并后 `main` CI，阶段结论为 `PASS`。阶段 2/3 synthetic Gateway 只保留为隔离兼容测试面，正式产品路径使用 Protocol 1.0 control plane 与独立 Terminal data plane。下一阶段是尚未开始的 Phase 6；不得提前进入 Phase 7～8。
 
 ## 目录职责
 

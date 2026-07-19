@@ -2,11 +2,11 @@
 
 ## 2026-07-20 conclusion
 
-Local Phase 4 conclusion: `PASS`.
+Phase 4 conclusion: `PASS`.
 
-Local Phase 5 conclusion: `PASS`.
+Phase 5 conclusion: `PASS`.
 
-The stage is not considered merged until PR review/CI, squash merge, and post-merge `main` CI are green. No real Account credential was read or queried.
+The stage was squash-merged by PR #12 as `b904ef7b156fca1d059062db14a4b27513d93c9e`. PR CI run `29703570077` and post-merge `main` CI run `29703706489` passed all Rust, frontend, Windows Desktop, and dependency-security jobs. The phase branch and isolated test environments were removed. No real Account credential was read or queried.
 
 ## Real destructive recovery evidence
 
@@ -84,6 +84,7 @@ Windows MSVC/Tauri evidence at the same commit:
 - diagnostic and repository scans found no real credential, Token, Cookie, Authorization value, private key, prompt body, or Terminal content;
 - controlled root/Socket/Vault/Runtime/recovery evidence modes were checked as `0700`/`0600` as applicable;
 - Linux Desktop build in the default WSL is `BLOCKED` by missing `pkg-config`/GTK development packages; Windows native Desktop validation passed and is the applicable target gate.
+- PR #12 had no review threads. The automated Codex review did not run because its service quota was exhausted; this is recorded as `NOT RUN`, not as a review pass.
 
 ## Defects found by real fault injection
 
