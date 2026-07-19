@@ -2,18 +2,19 @@
 
 ## 定位与阶段
 
-Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。阶段 1 的需求与架构已冻结，阶段 2 Runtime POC 与阶段 3 Terminal POC 已完成验证；下一阶段是尚未开始的 Phase 4。阶段 2/3 代码仍是明确的非生产 POC，不得描述为正式 daemon、协议或产品能力。不要在没有独立任务时提前实现 Phase 4 的锁、事务、Crash Recovery 或重启恢复，也不要提前进入 Phase 5～7。后续 POC 若推翻冻结假设，必须通过新的 ADR 修订，不能静默改写已接受决策。
+Muxlane 是面向 Windows 与 WSL 的轻量 Codex Runtime 工作台。阶段 1 的需求与架构已冻结，阶段 2 Runtime POC 与阶段 3 Terminal POC 已完成验证；Phase 4/5 实现位于独立阶段分支，尚未通过全部真实 WSL/Windows/Terminal/Usage 门禁，不得描述为已关闭或可合并。阶段 2/3 代码仍是明确的非生产 POC；Phase 5 正式后台不能依赖或静默升格 POC frame、Gateway 或 synthetic runner。不得提前进入 Phase 6～8。后续验证若推翻冻结假设，必须通过新的 ADR 修订，不能静默改写已接受决策。
 
 ## 目录职责
 
 - `apps/desktop`：Tauri 2 + React 桌面外壳；首版 UI 使用简体中文。
 - `apps/desktop/src-tauri`：最小原生入口和最小权限配置。
-- `crates/muxlane-core`：共享核心边界；阶段 0 没有正式领域模型。
-- `crates/muxlane-protocol`：共享 typed 边界；Phase 3 frame 仍是 POC 契约，不是稳定 RPC。
-- `crates/muxlaned`：WSL daemon 二进制边界；当前包含非生产 Phase 3 stdio Gateway/synthetic runner。
-- `crates/muxlane-cli`：WSL CLI 二进制边界。
+- `crates/muxlane-core`：正式核心领域、SQLite、Vault、锁、Launch、Recovery、Terminal 与 Usage 边界。
+- `crates/muxlane-protocol`：Protocol 1.0 typed control boundary；Phase 3 frame 仍是兼容 POC，不是正式 Terminal data plane。
+- `crates/muxlaned`：单实例 WSL daemon、受管 Runner 和暂时保留的 Phase 3 compatibility gateway。
+- `crates/muxlane-cli`：正式 JSON CLI 与诊断/恢复入口。
 - `docs/adr`：长期架构决策记录。
 - `docs/poc/phase-3-terminal`：Phase 3 Terminal POC 的设计、真实 Windows/WSL 证据与限制。
+- `poc/phase-4-recovery`：只使用 synthetic credential 与隔离目录的可重复故障注入入口。
 
 ## Git 与验证
 
